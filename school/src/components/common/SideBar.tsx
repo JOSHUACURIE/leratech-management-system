@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, BookOpen, Wallet, LineChart, 
-  BarChart3, Bell, Settings, ShieldCheck, Wrench, ChevronRight, LogOut, GraduationCap, Terminal as TerminalIcon 
+  BarChart3, Bell, CreditCard,FileText,Percent, RotateCcw,Settings, AlertTriangle, User ,ListChecks ,ShieldCheck,CalendarCheck,Calendar, Wrench, MessageSquare ,ChevronRight, LogOut,Receipt, GraduationCap, Terminal as TerminalIcon 
 } from 'lucide-react';
 
-// 1. Define types first
+
 type SidebarProps = {
   role: "ADMIN" | "TEACHER" | "PARENT" | "BURSAR";
 };
@@ -17,7 +17,7 @@ type MenuItem = {
   subItems?: string[];
 };
 
-// 2. The Navigation Logic
+
 const Sidebar: React.FC<SidebarProps> = ({ role }) => {
   const menus: MenuItem[] = {
     ADMIN: [
@@ -37,14 +37,122 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         { label: "Score Submission", path: "/teacher/scores", icon: <BookOpen size={20} /> },
         { label: "CBC Submission", path: "/teacher/cbc", icon: <BookOpen size={20} /> },
     ],
-    PARENT: [
-        { label: "Dashboard", path: "/parent/dashboard", icon: <LayoutDashboard size={20} /> },
-        { label: "Results", path: "/parent/results", icon: <LineChart size={20} /> },
-    ],
-    BURSAR: [
-        { label: "Dashboard", path: "/bursar/dashboard", icon: <LayoutDashboard size={20} /> },
-        { label: "Record Payments", path: "/bursar/payments", icon: <Wallet size={20} /> },
-    ]
+PARENT: [
+  {
+    label: "Dashboard",
+    path: "/parent/dashboard",
+    icon: <LayoutDashboard size={20} />,
+  },
+  {
+    label: "Results",
+    path: "/parent/results",
+    icon: <LineChart size={20} />,
+  },
+  {
+    label: "Fee Balance",
+    path: "/parent/fees",
+    icon: <Wallet size={20} />,
+  },
+  {
+    label: "Payments History",
+    path: "/parent/payments",
+    icon: <Receipt size={20} />,
+  },
+  {
+    label: "Attendance",
+    path: "/parent/attendance",
+    icon: <CalendarCheck size={20} />,
+  },
+  {
+    label: "Homework & Assignments",
+    path: "/parent/homework",
+    icon: <BookOpen size={20} />,
+  },
+  {
+    label: "Performance Analytics",
+    path: "/parent/performance",
+    icon: <BarChart3 size={20} />,
+  },
+  {
+    label: "Teacher Communication",
+    path: "/parent/messages",
+    icon: <MessageSquare size={20} />,
+  },
+  {
+    label: "Notifications",
+    path: "/parent/notifications",
+    icon: <Bell size={20} />,
+  },
+  {
+    label: "School Calendar",
+    path: "/parent/calendar",
+    icon: <Calendar size={20} />,
+  },
+  {
+    label: "Profile Settings",
+    path: "/parent/profile",
+    icon: <User size={20} />,
+  },
+],
+
+  BURSAR: [
+  {
+    label: "Dashboard",
+    path: "/bursar/dashboard",
+    icon: <LayoutDashboard size={20} />,
+  },
+  {
+    label: "Record Payments",
+    path: "/bursar/payments",
+    icon: <Wallet size={20} />,
+  },
+  {
+    label: "Fee Structures",
+    path: "/bursar/fee-structure",
+    icon: <FileText size={20} />,
+  },
+  {
+    label: "Student Balances",
+    path: "/bursar/balances",
+    icon: <Users size={20} />,
+  },
+  {
+    label: "Invoices",
+    path: "/bursar/invoices",
+    icon: <Receipt size={20} />,
+  },
+  {
+    label: "Payment History",
+    path: "/bursar/history",
+    icon: <ListChecks size={20} />,
+  },
+  {
+    label: "Fee Arrears",
+    path: "/bursar/arrears",
+    icon: <AlertTriangle size={20} />,
+  },
+  {
+    label: "Scholarships / Discounts",
+    path: "/bursar/discounts",
+    icon: <Percent size={20} />,
+  },
+  {
+    label: "Refunds",
+    path: "/bursar/refunds",
+    icon: <RotateCcw size={20} />,
+  },
+  {
+    label: "Financial Reports",
+    path: "/bursar/reports",
+    icon: <BarChart3 size={20} />,
+  },
+  {
+    label: "MPESA / Bank Reconciliation",
+    path: "/bursar/reconciliation",
+    icon: <CreditCard size={20} />,
+  },
+]
+
   }[role] || [];
 
   const location = useLocation();
