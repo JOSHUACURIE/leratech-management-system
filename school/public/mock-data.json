@@ -1,0 +1,117 @@
+{
+  "school": {
+    "id": "school_001",
+    "name": "Sunrise International School",
+    "logo": "/logos/sunrise.png",
+    "motto": "Knowledge is Power",
+    "address": "123 Nairobi Road, Nairobi",
+    "phone": "+254700000001",
+    "email": "info@sunrise.ac.ke"
+  },
+  "users": [
+    { "id": "user_admin_01", "name": "Alice Admin", "role": "ADMIN" },
+    { "id": "user_teacher_01", "name": "Tom Teacher", "role": "TEACHER" },
+    { "id": "user_parent_01", "name": "Pat Parent", "role": "PARENT" },
+    { "id": "user_bursar_01", "name": "Betty Bursar", "role": "BURSAR" }
+  ],
+  "educationLevels": [
+    { "id": "level_primary", "name": "Primary", "order": 1 },
+    { "id": "level_secondary", "name": "Secondary", "order": 2 }
+  ],
+  "classes": [
+    { "id": "class_4", "levelId": "level_primary", "name": "Grade 4" },
+    { "id": "class_5", "levelId": "level_primary", "name": "Grade 5" },
+    { "id": "class_1_form", "levelId": "level_secondary", "name": "Form 1" }
+  ],
+  "streams": [
+    { "id": "stream_a", "classId": "class_4", "name": "East" },
+    { "id": "stream_b", "classId": "class_4", "name": "West" }
+  ],
+  "students": [
+    {
+      "id": "student_001",
+      "name": "John Doe",
+      "admissionNo": "ADM1001",
+      "classId": "class_4",
+      "streamId": "stream_a"
+    },
+    {
+      "id": "student_002",
+      "name": "Jane Smith",
+      "admissionNo": "ADM1002",
+      "classId": "class_4",
+      "streamId": "stream_b"
+    }
+  ],
+  "parentStudents": [
+    { "parentId": "user_parent_01", "studentId": "student_001" }
+  ],
+  "subjects": [
+    { "id": "sub_math", "name": "Mathematics", "classIds": ["class_4", "class_5"], "assessmentModel": "SCORE" },
+    { "id": "sub_eng", "name": "English", "classIds": ["class_4", "class_5"], "assessmentModel": "SCORE" },
+    { "id": "sub_science", "name": "Science", "classIds": ["class_4"], "assessmentModel": "CBC" }
+  ],
+  "assessmentModels": [
+    { "id": "assess_score", "type": "SCORE", "name": "Score-Based Exam" },
+    { "id": "assess_cbc", "type": "COMPETENCY", "name": "CBC Assessment" }
+  ],
+  "grading": [
+    { "grade": "A", "min": 80, "max": 100, "points": 12, "remark": "Excellent" },
+    { "grade": "B", "min": 70, "max": 79, "points": 10, "remark": "Very Good" },
+    { "grade": "C", "min": 60, "max": 69, "points": 8, "remark": "Good" }
+  ],
+  "cbcLevels": [
+    { "id": "level_ee", "code": "EE", "name": "Exceeding Expectation" },
+    { "id": "level_me", "code": "ME", "name": "Meeting Expectation" },
+    { "id": "level_ae", "code": "AE", "name": "Approaching Expectation" },
+    { "id": "level_be", "code": "BE", "name": "Below Expectation" }
+  ],
+  "scoreResults": [
+    { "studentId": "student_001", "subjectId": "sub_math", "term": "Term 1", "score": 85, "grade": "A", "points": 12 },
+    { "studentId": "student_002", "subjectId": "sub_math", "term": "Term 1", "score": 73, "grade": "B", "points": 10 },
+    { "studentId": "student_001", "subjectId": "sub_eng", "term": "Term 1", "score": 78, "grade": "B", "points": 10 },
+    { "studentId": "student_002", "subjectId": "sub_eng", "term": "Term 1", "score": 65, "grade": "C", "points": 8 }
+  ],
+  "cbcResults": [
+    { "studentId": "student_001", "subjectId": "sub_science", "term": "Term 1", "competency": "Scientific Inquiry", "level": "ME", "comment": "Good progress" },
+    { "studentId": "student_002", "subjectId": "sub_science", "term": "Term 1", "competency": "Scientific Inquiry", "level": "AE", "comment": "Needs support" }
+  ],
+  "fees": [
+    { "studentId": "student_001", "term": "Term 1", "amount": 5000, "paid": 3000, "balance": 2000 },
+    { "studentId": "student_002", "term": "Term 1", "amount": 5000, "paid": 5000, "balance": 0 }
+  ],
+  "reports": [
+    {
+      "studentId": "student_001",
+      "term": "Term 1",
+      "scoreResults": [
+        { "subject": "Mathematics", "score": 85, "grade": "A" },
+        { "subject": "English", "score": 78, "grade": "B" }
+      ],
+      "cbcResults": [
+        { "subject": "Science", "competency": "Scientific Inquiry", "level": "ME", "comment": "Good progress" }
+      ],
+      "totalPoints": 22,
+      "averageScore": 81.5,
+      "position": 1
+    },
+    {
+      "studentId": "student_002",
+      "term": "Term 1",
+      "scoreResults": [
+        { "subject": "Mathematics", "score": 73, "grade": "B" },
+        { "subject": "English", "score": 65, "grade": "C" }
+      ],
+      "cbcResults": [
+        { "subject": "Science", "competency": "Scientific Inquiry", "level": "AE", "comment": "Needs support" }
+      ],
+      "totalPoints": 18,
+      "averageScore": 69,
+      "position": 2
+    }
+  ],
+  "notifications": [
+    { "id": "notif_001", "userId": "user_parent_01", "message": "New report card is available for John Doe", "read": false },
+    { "id": "notif_002", "userId": "user_teacher_01", "message": "You have pending score submissions for Grade 4", "read": false }
+  ]
+}
