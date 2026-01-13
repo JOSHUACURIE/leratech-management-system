@@ -4,7 +4,7 @@ import Card from "../../components/common/Card";
 
 const mockResults = [
   { id: 1, student: "Jane Smith", class: "Grade 4", stream: "A", term: "Term 1", average: 85, rank: 2 },
-  { id: 2, student: "John Doe", class: "Grade 5", stream: "B", term: "Term 1", average: 92, rank: 1 },
+  { id: 2, student: "Mary Jaoko", class: "Grade 5", stream: "B", term: "Term 1", average: 92, rank: 1 },
   { id: 3, student: "Mary Johnson", class: "Grade 6", stream: "C", term: "Term 1", average: 78, rank: 4 },
   { id: 4, student: "Peter Okoth", class: "Grade 4", stream: "A", term: "Term 1", average: 60, rank: 5 },
   { id: 5, student: "Lucy Wambui", class: "Grade 5", stream: "B", term: "Term 1", average: 98, rank: 1 },

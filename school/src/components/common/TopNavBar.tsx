@@ -16,7 +16,7 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
   const { user, logout } = useAuth();
   const [showDropdown, setShowDropdown] = React.useState(false);
 
-  if (!user) return null; // Don't show navbar if not logged in
+  if (!user) return null; 
 
   return (
     <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3">

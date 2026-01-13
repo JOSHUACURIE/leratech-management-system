@@ -4,7 +4,7 @@ import Card from "../../components/common/Card";
 
 const mockFeeBalances = [
   { id: 1, student: "Jane Smith", class: "Grade 4", stream: "A", balance: 5000, lastPayment: "2026-01-05" },
-  { id: 2, student: "John Doe", class: "Grade 5", stream: "B", balance: 0, lastPayment: "2025-12-20" },
+  { id: 2, student: "Joshua Juma", class: "Grade 5", stream: "B", balance: 0, lastPayment: "2025-12-20" },
   { id: 3, student: "Mary Johnson", class: "Grade 6", stream: "C", balance: 1200, lastPayment: "2026-01-10" },
   { id: 4, student: "Peter Okoth", class: "Grade 4", stream: "A", balance: 3000, lastPayment: "2025-11-28" },
   { id: 5, student: "Lucy Wambui", class: "Grade 5", stream: "B", balance: 0, lastPayment: "2026-01-02" },

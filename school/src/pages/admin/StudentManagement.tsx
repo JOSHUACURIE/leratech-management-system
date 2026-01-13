@@ -4,7 +4,7 @@ import Card from "../../components/common/Card";
 
 const initialStudents = [
   { id: 1, name: "Jane Smith", class: "Grade 4", stream: "A", subjects: ["Math", "English"] },
-  { id: 2, name: "John Doe", class: "Grade 5", stream: "B", subjects: ["Science", "English"] },
+  { id: 2, name: "Mary Jaoko", class: "Grade 5", stream: "B", subjects: ["Science", "English"] },
   { id: 3, name: "Mary Johnson", class: "Grade 6", stream: "C", subjects: ["Math", "Kiswahili"] }
 ];
 

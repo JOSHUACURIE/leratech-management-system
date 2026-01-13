@@ -22,7 +22,7 @@ const mockAuditLogs = [
     user: "Bob Bursar",
     role: "BURSAR",
     action: "Recorded fee payment",
-    details: "Payment of KES 25,000 for John Doe (Grade 5). Receipt #8829.",
+    details: "Payment of KES 25,000 for Joshua Juma (Grade 5). Receipt #8829.",
     ip: "192.168.1.12",
     type: "INFO",
     date: "2026-01-12 08:30"

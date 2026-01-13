@@ -30,7 +30,7 @@
   "students": [
     {
       "id": "student_001",
-      "name": "John Doe",
+      "name": "Smith Juma",
       "admissionNo": "ADM1001",
       "classId": "class_4",
       "streamId": "stream_a"
@@ -111,7 +111,7 @@
     }
   ],
   "notifications": [
-    { "id": "notif_001", "userId": "user_parent_01", "message": "New report card is available for John Doe", "read": false },
+    { "id": "notif_001", "userId": "user_parent_01", "message": "New report card is available forJoshua Juma", "read": false },
     { "id": "notif_002", "userId": "user_teacher_01", "message": "You have pending score submissions for Grade 4", "read": false }
   ]
 }

@@ -17,7 +17,6 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Test credentials for all roles
 const testUsers: { [key: string]: { password: string; user: User } } = {
   "admin@school.com": { password: "admin123", user: { name: "Alice Admin", role: "ADMIN" } },
   "teacher@school.com": { password: "teacher123", user: { name: "Tom Teacher", role: "TEACHER" } },
