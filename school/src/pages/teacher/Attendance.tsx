@@ -12,7 +12,6 @@ import {
   Filter
 } from "lucide-react";
 
-/* ---------------- TYPES ---------------- */
 type Student = {
   id: number;
   name: string;
@@ -58,7 +57,7 @@ const Attendance: React.FC = () => {
 
   return (
     <div className="p-6 bg-[#F8FAFC] min-h-screen space-y-8">
-      {/* 1. Dynamic Header */}
+     
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-indigo-200">

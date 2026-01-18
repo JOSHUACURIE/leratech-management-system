@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-/* ---------------- MOCK DATA ---------------- */
+
 
 const assignedSubjects = [
   {
@@ -49,7 +49,7 @@ const SubjectsAssigned: React.FC = () => {
 
   return (
     <div className="p-6 bg-[#F8FAFC] min-h-screen space-y-8">
-      {/* Header Section */}
+     
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tight">Academic Portfolio</h1>
@@ -61,18 +61,18 @@ const SubjectsAssigned: React.FC = () => {
         </div>
       </div>
 
-      {/* Subjects Grid */}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
         {assignedSubjects.map((item) => (
           <Card key={item.id} className="group border-none shadow-xl shadow-slate-200/40 rounded-[2.5rem] bg-white hover:shadow-2xl transition-all duration-500 relative overflow-hidden">
             
-            {/* Background Decorative Icon */}
+            
             <div className="absolute -bottom-4 -right-4 text-slate-50 opacity-[0.03] group-hover:opacity-[0.08] group-hover:scale-110 transition-all duration-700">
                <BookOpen size={180} />
             </div>
 
             <div className="relative z-10 space-y-6">
-              {/* Top Row: Subject & Curriculum Badge */}
+             
               <div className="flex justify-between items-start">
                 <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-lg group-hover:bg-indigo-600 transition-colors">
                   <BookOpen size={24} />

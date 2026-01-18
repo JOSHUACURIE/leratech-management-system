@@ -1,291 +1,694 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Card from "../../components/common/Card";
-import { 
-  MessageSquare, 
-  Send, 
-  Paperclip, 
-  Search, 
-  Phone, 
-  Mail, 
-  BookOpen,
-  User,
-  Calendar,
-  Clock
-} from "lucide-react";
+import { TrendingUp, Target, Award, BarChart3, Brain, Loader2, AlertCircle, Send, User, Bot, Users } from "lucide-react";
 
-type Teacher = {
-  id: string;
+interface SubjectScore {
   name: string;
-  subject: string;
-  avatar: string;
-  lastActive: string;
-  unread: number;
-};
+  score: number;
+  trend: string;
+  teacher?: string;
+}
 
-type Message = {
+interface StudentInfo {
+  id: number;
+  name: string;
+  grade: string;
+  email: string;
+  class: string;
+  teacher?: string;
+  parentContact?: string;
+}
+
+interface PerformanceData {
+  subjects: SubjectScore[];
+  overall: number;
+  rank: number;
+  improvement: number;
+}
+
+interface MonthlyTrend {
+  month: string;
+  score: number;
+}
+
+interface AIQuery {
+  query: string;
+  thread_id?: string;
+}
+
+interface AIResponse {
+  success: boolean;
+  data: {
+    answer: string;
+    thread_id: string;
+    status: string;
+  };
+  thread_id: string;
+  timestamp: string;
+}
+
+interface Message {
   id: string;
-  sender: "parent" | "teacher";
   text: string;
-  time: string;
-  read: boolean;
-};
+  sender: 'user' | 'ai';
+  timestamp: Date;
+}
 
-const mockTeachers: Teacher[] = [
-  { id: "1", name: "Mr. Johnson", subject: "Mathematics", avatar: "MJ", lastActive: "2 min ago", unread: 2 },
-  { id: "2", name: "Ms. Wanjiru", subject: "English", avatar: "MW", lastActive: "1 hour ago", unread: 0 },
-  { id: "3", name: "Mrs. Omondi", subject: "Science", avatar: "MO", lastActive: "Yesterday", unread: 1 },
-  { id: "4", name: "Mr. Kamau", subject: "Kiswahili", avatar: "MK", lastActive: "3 days ago", unread: 0 },
-];
+const PerformanceAnalysis: React.FC = () => {
+  const [subjects, setSubjects] = useState<SubjectScore[]>([]);
+  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
+  const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
+  const [monthlyTrend, setMonthlyTrend] = useState<MonthlyTrend[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [userInput, setUserInput] = useState<string>("");
+  const [chatHistory, setChatHistory] = useState<Message[]>([
+    { id: "1", text: "Hello! I'm your AI performance analyst. Ask me anything about student performance, study strategies, or academic analysis.", sender: 'ai', timestamp: new Date() }
+  ]);
+  
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
-const mockMessages: Record<string, Message[]> = {
-  "1": [
-    { id: "1", sender: "teacher", text: "John is doing great in algebra, but needs more practice with fractions.", time: "10:30 AM", read: true },
-    { id: "2", sender: "parent", text: "Thank you for the update. Any recommended resources?", time: "11:15 AM", read: true },
-    { id: "3", sender: "teacher", text: "I'll send some worksheets. Parent-teacher meeting next week?", time: "2:45 PM", read: false },
-    { id: "4", sender: "teacher", text: "Math test scheduled for Friday.", time: "3:20 PM", read: false },
-  ],
-  "2": [
-    { id: "1", sender: "parent", text: "Jane's essay grades improved!", time: "Yesterday", read: true },
-  ],
-  "3": [
-    { id: "1", sender: "teacher", text: "Science project deadline extended.", time: "2 days ago", read: true },
-  ],
-  "4": [
-    { id: "1", sender: "teacher", text: "Swahili oral exam next Monday.", time: "1 week ago", read: true },
-  ],
-};
+  // Fetch all data on component mount
+  useEffect(() => {
+    fetchAllData();
+  }, []);
 
-const TeacherCommunication: React.FC = () => {
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher>(mockTeachers[0]);
-  const [messageText, setMessageText] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  // Scroll to bottom when new messages are added
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
 
-  const filteredTeachers = mockTeachers.filter(teacher =>
-    teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    teacher.subject.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Fetch all data from backend APIs
+  const fetchAllData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Fetch student info (using student ID 1 for now)
+      const studentResponse = await fetch('http://localhost:3000/api/v1/students/1');
+      const studentData = await studentResponse.json();
+      
+      if (studentData.success) {
+        setStudentInfo(studentData.data);
+        
+        // Fetch subject scores
+        const subjectsResponse = await fetch('http://localhost:3000/api/v1/students/1/subjects');
+        const subjectsData = await subjectsResponse.json();
+        
+        if (subjectsData.success) {
+          setSubjects(subjectsData.data);
+        }
+        
+        // Fetch performance data
+        const performanceResponse = await fetch('http://localhost:3000/api/v1/students/1/performance');
+        const performanceData = await performanceResponse.json();
+        
+        if (performanceData.success) {
+          setPerformanceData(performanceData);
+          
+          // Extract monthly trend from performance data
+          if (performanceData.monthly_trend) {
+            setMonthlyTrend(performanceData.monthly_trend);
+          }
+        }
+      }
+      
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError('Failed to load performance data from server');
+      
+      // Fallback to mock data if API fails
+      setFallbackData();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const currentMessages = mockMessages[selectedTeacher.id] || [];
+  // Fallback mock data if API fails
+  const setFallbackData = () => {
+    setStudentInfo({
+      id: 1,
+      name: 'Vin Jaoko',
+      grade: '4th',
+      email: 'vin.jaoko@school.edu',
+      class: 'Grade 4A',
+      teacher: 'Ms. Johnson',
+      parentContact: 'parent@email.com'
+    });
+    
+    setSubjects([
+      { name: "Mathematics", score: 85, trend: "up", teacher: "Mr. Smith" },
+      { name: "English", score: 88, trend: "stable", teacher: "Ms. Davis" },
+      { name: "Science", score: 78, trend: "up", teacher: "Dr. Wilson" },
+      { name: "Kiswahili", score: 75, trend: "up", teacher: "Mr. Omondi" },
+      { name: "Social Studies", score: 82, trend: "stable", teacher: "Mrs. Patel" },
+      { name: "Arts", score: 90, trend: "up", teacher: "Ms. Taylor" }
+    ]);
+    
+    setPerformanceData({
+      subjects: [
+        { name: "Mathematics", score: 85, trend: "up" },
+        { name: "English", score: 88, trend: "stable" },
+        { name: "Science", score: 78, trend: "up" },
+        { name: "Kiswahili", score: 75, trend: "up" }
+      ],
+      overall: 82.5,
+      rank: 3,
+      improvement: 12
+    });
+    
+    setMonthlyTrend([
+      { month: "Jan", score: 65 },
+      { month: "Feb", score: 70 },
+      { month: "Mar", score: 75 },
+      { month: "Apr", score: 78 },
+      { month: "May", score: 82 },
+      { month: "Jun", score: 85 }
+    ]);
+  };
 
-  const sendMessage = () => {
-    if (!messageText.trim()) return;
-    setMessageText("");
+  // Function to query AI for performance analysis
+  const queryAI = async (question: string) => {
+    if (!question.trim()) return;
+    
+    setAiLoading(true);
+    setError(null);
+    
+    // Add user message to chat
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: question,
+      sender: 'user',
+      timestamp: new Date()
+    };
+    
+    setChatHistory(prev => [...prev, userMessage]);
+    setUserInput("");
+
+    try {
+      const aiQuery: AIQuery = {
+        query: question,
+        thread_id: threadId || undefined
+      };
+
+      const response = await fetch('http://localhost:3000/api/v1/ai/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiQuery)
+      });
+
+      const data: AIResponse = await response.json();
+
+      if (data.success) {
+        // Add AI response to chat
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: data.data.answer,
+          sender: 'ai',
+          timestamp: new Date()
+        };
+        
+        setChatHistory(prev => [...prev, aiMessage]);
+        setThreadId(data.data.thread_id);
+      } else {
+        throw new Error(data.data?.answer || 'AI request failed');
+      }
+    } catch (err) {
+      console.error('AI Query Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to get AI analysis');
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        text: "Sorry, I encountered an error. Please try again.",
+        sender: 'ai',
+        timestamp: new Date()
+      };
+      setChatHistory(prev => [...prev, errorMessage]);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Predefined AI questions for performance analysis
+  const aiQuestions = [
+    "Analyze my Mathematics performance",
+    "What are my areas of improvement?",
+    "Suggest study strategies based on my scores",
+    "Compare my performance across all subjects"
+  ];
+
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userInput.trim()) {
+      queryAI(userInput);
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (userInput.trim() && !aiLoading) {
+        queryAI(userInput);
+      }
+    }
+  };
+
+  // Clear chat history
+  const clearChat = () => {
+    setChatHistory([
+      { id: "1", text: "Hello! I'm your AI performance analyst. Ask me anything about student performance, study strategies, or academic analysis.", sender: 'ai', timestamp: new Date() }
+    ]);
+    setThreadId(null);
+    setError(null);
+  };
+
+  // Function to update a subject score (simulated - would normally call an API)
+  const updateSubjectScore = async (subjectName: string, newScore: number) => {
+    try {
+      setSubjects(prev => prev.map(subject => 
+        subject.name === subjectName ? { ...subject, score: newScore } : subject
+      ));
+      
+      await queryAI(`I scored ${newScore}% in ${subjectName}. Analyze this result.`);
+    } catch (err) {
+      console.error('Error updating score:', err);
+    }
+  };
+
+  // Calculate overall average from subjects
+  const calculateOverallAverage = () => {
+    if (subjects.length === 0) return 0;
+    const total = subjects.reduce((acc, subject) => acc + subject.score, 0);
+    return total / subjects.length;
   };
 
   return (
-    <div className="p-6 bg-[#F8FAFC] min-h-screen space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <MessageSquare className="text-indigo-600" /> Teacher Communication
-          </h1>
-          <p className="text-slate-500">Connect with your child's teachers</p>
-        </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl font-bold hover:bg-slate-50">
-            <Phone size={18} /> Call
-          </button>
-          <button className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-xl font-bold hover:bg-slate-50">
-            <Mail size={18} /> Email
-          </button>
+    <div className="p-6 space-y-6">
+      {/* Student Header */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-2xl border border-indigo-100">
+        <div className="flex justify-between items-start">
+          <div>
+            {loading ? (
+              <div className="animate-pulse">
+                <div className="h-8 w-48 bg-slate-200 rounded mb-2"></div>
+                <div className="h-4 w-64 bg-slate-200 rounded"></div>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
+                  <Users className="text-indigo-600" />
+                  {studentInfo?.name || 'Student Name'}
+                </h1>
+                <div className="mt-2 flex flex-wrap gap-4 text-slate-600">
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium">Grade:</span> {studentInfo?.grade}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium">Class:</span> {studentInfo?.class}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium">Teacher:</span> {studentInfo?.teacher}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="text-right">
+            <div className="text-sm text-slate-500">Term 1 2026</div>
+            <button
+              onClick={() => fetchAllData()}
+              className="mt-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <span>Refresh Data</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Teacher List - Left Sidebar */}
-        <div className="lg:col-span-4">
-          <Card className="border-none shadow-lg rounded-2xl p-0 overflow-hidden h-[600px] flex flex-col">
-            <div className="p-6 border-b border-slate-100">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search teachers..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                />
+      {/* AI Chat Interface */}
+      <Card className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+            <Brain className="text-purple-500" /> AI Performance Analyst
+          </h2>
+          <button
+            onClick={clearChat}
+            className="text-sm px-3 py-1 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+          >
+            Clear Chat
+          </button>
+        </div>
+        
+        {/* Chat History */}
+        <div 
+          ref={chatContainerRef}
+          className="h-96 mb-4 p-4 bg-slate-50 rounded-lg overflow-y-auto space-y-4"
+        >
+          {chatHistory.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-2xl p-4 ${
+                  message.sender === 'user'
+                    ? 'bg-indigo-500 text-white rounded-br-none'
+                    : 'bg-white border border-slate-200 rounded-bl-none'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {message.sender === 'ai' ? (
+                    <Bot size={16} className="text-purple-500" />
+                  ) : (
+                    <User size={16} className="text-indigo-300" />
+                  )}
+                  <span className="text-xs font-medium">
+                    {message.sender === 'ai' ? 'AI Analyst' : 'You'}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p className="whitespace-pre-wrap">{message.text}</p>
               </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {filteredTeachers.map((teacher) => (
-                <button
-                  key={teacher.id}
-                  onClick={() => setSelectedTeacher(teacher)}
-                  className={`w-full p-4 rounded-xl text-left transition-all ${
-                    selectedTeacher.id === teacher.id
-                      ? "bg-indigo-50 border-2 border-indigo-200"
-                      : "bg-white border border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg ${
-                      selectedTeacher.id === teacher.id 
-                        ? "bg-gradient-to-br from-indigo-500 to-purple-600" 
-                        : "bg-gradient-to-br from-slate-600 to-slate-800"
-                    }`}>
-                      {teacher.avatar}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-bold text-slate-800">{teacher.name}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <BookOpen size={14} className="text-slate-400" />
-                            <span className="text-sm text-slate-500">{teacher.subject}</span>
-                          </div>
-                        </div>
-                        {teacher.unread > 0 && (
-                          <span className="px-2 py-1 bg-rose-500 text-white text-xs font-bold rounded-full">
-                            {teacher.unread}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-slate-400 mt-2">
-                        <Clock size={12} />
-                        Last active: {teacher.lastActive}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
+          ))}
+          
+          {aiLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-none p-4 max-w-[80%]">
+                <div className="flex items-center gap-2">
+                  <Bot size={16} className="text-purple-500" />
+                  <span className="text-xs font-medium">AI Analyst</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="h-2 w-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="h-2 w-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="h-2 w-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
             </div>
-          </Card>
+          )}
         </div>
 
-        {/* Chat Area - Right Side */}
-        <div className="lg:col-span-8">
-          <Card className="border-none shadow-lg rounded-2xl p-0 overflow-hidden h-[600px] flex flex-col">
-            {/* Chat Header */}
-            <div className="p-6 border-b border-slate-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg">
-                    {selectedTeacher.avatar}
-                  </div>
-                  <div>
-                    <h2 className="font-bold text-slate-800">{selectedTeacher.name}</h2>
-                    <div className="flex items-center gap-3 text-sm text-slate-500">
-                      <div className="flex items-center gap-1">
-                        <BookOpen size={14} />
-                        {selectedTeacher.subject}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        Class: Grade 4
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm text-slate-500">Active now</div>
-                  <div className="text-xs text-emerald-500 font-bold">● Online</div>
-                </div>
-              </div>
-            </div>
+        {/* Quick Action Buttons */}
+        <div className="mb-4">
+          <p className="text-slate-600 mb-3 text-sm font-medium">Quick questions:</p>
+          <div className="flex flex-wrap gap-2">
+            {aiQuestions.map((question, index) => (
+              <button
+                key={index}
+                onClick={() => queryAI(question)}
+                disabled={aiLoading}
+                className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </div>
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
-              {currentMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender === "parent" ? "justify-end" : "justify-start"}`}
-                >
-                  <div className={`max-w-[70%] rounded-2xl p-4 ${
-                    message.sender === "parent"
-                      ? "bg-indigo-500 text-white rounded-br-none"
-                      : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
-                  }`}>
-                    <p>{message.text}</p>
-                    <div className={`text-xs mt-2 flex justify-between items-center ${
-                      message.sender === "parent" ? "text-indigo-200" : "text-slate-400"
-                    }`}>
-                      <span>{message.time}</span>
-                      {message.sender === "teacher" && !message.read && (
-                        <span className="text-rose-500">● Unread</span>
+        {/* Text Input Form */}
+        <form onSubmit={handleSubmit} className="relative">
+          <div className="relative">
+            <textarea
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Ask about performance, study strategies, or analysis..."
+              className="w-full p-4 pr-12 bg-white border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none resize-none"
+              rows={3}
+              disabled={aiLoading}
+            />
+            <button
+              type="submit"
+              disabled={!userInput.trim() || aiLoading}
+              className="absolute right-3 bottom-3 p-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send size={20} />
+            </button>
+          </div>
+          <div className="flex justify-between items-center mt-2">
+            <p className="text-xs text-slate-500">
+              Press Enter to send • Shift+Enter for new line
+            </p>
+            {threadId && (
+              <p className="text-xs text-slate-500">
+                Session: {threadId.substring(0, 8)}...
+              </p>
+            )}
+          </div>
+        </form>
+
+        {error && (
+          <div className="mt-4 flex items-center gap-2 text-red-600 p-3 bg-red-50 rounded-lg">
+            <AlertCircle size={18} />
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
+      </Card>
+
+      {/* Main Performance Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Subject Scores Card */}
+        <Card className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <Target className="text-indigo-500" /> Subject Scores
+            </h2>
+            {loading ? (
+              <Loader2 className="animate-spin text-slate-400" size={20} />
+            ) : (
+              <span className="text-sm text-slate-500">{subjects.length} subjects</span>
+            )}
+          </div>
+          
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="h-4 bg-slate-200 rounded mb-2 w-1/4"></div>
+                  <div className="h-2 bg-slate-200 rounded-full"></div>
+                </div>
+              ))}
+            </div>
+          ) : subjects.length > 0 ? (
+            <div className="space-y-4">
+              {subjects.map((subject, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between">
+                    <div>
+                      <span className="font-bold text-slate-700">{subject.name}</span>
+                      {subject.teacher && (
+                        <span className="text-xs text-slate-500 ml-2">({subject.teacher})</span>
                       )}
                     </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => updateSubjectScore(subject.name, Math.min(100, subject.score + 5))}
+                        className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200"
+                      >
+                        +5
+                      </button>
+                      <span className="font-bold text-slate-800">{subject.score}%</span>
+                      <button
+                        onClick={() => updateSubjectScore(subject.name, Math.max(0, subject.score - 5))}
+                        className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                      >
+                        -5
+                      </button>
+                    </div>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-500 ${
+                        subject.score >= 80 ? "bg-emerald-500" :
+                        subject.score >= 70 ? "bg-blue-500" : "bg-amber-500"
+                      }`}
+                      style={{ width: `${subject.score}%` }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
-
-            {/* Message Input */}
-            <div className="p-4 border-t border-slate-100 bg-white">
-              <div className="flex gap-3">
-                <button className="p-3 text-slate-400 hover:text-slate-600">
-                  <Paperclip size={20} />
-                </button>
-                <input
-                  type="text"
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Type your message here..."
-                  className="flex-1 p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!messageText.trim()}
-                  className={`px-6 rounded-xl font-bold ${
-                    messageText.trim()
-                      ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                      : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                  }`}
-                >
-                  <Send size={20} />
-                </button>
-              </div>
-              <p className="text-xs text-slate-400 mt-2 text-center">
-                Messages are monitored by school administration
-              </p>
+          ) : (
+            <div className="text-center py-8 text-slate-500">
+              No subject data available
             </div>
-          </Card>
-        </div>
+          )}
+          
+          <button
+            onClick={() => queryAI("Analyze all my subject scores and provide recommendations")}
+            className="mt-6 w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50"
+            disabled={aiLoading || subjects.length === 0}
+          >
+            <Brain size={20} />
+            Get AI Analysis of All Subjects
+          </button>
+        </Card>
+
+        {/* Key Metrics Card */}
+        <Card className="p-6">
+          <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+            <Award className="text-amber-500" /> Key Metrics
+          </h2>
+          <div className="space-y-6">
+            <div className="text-center">
+              {loading ? (
+                <div className="animate-pulse">
+                  <div className="h-12 bg-slate-200 rounded mx-auto w-32 mb-2"></div>
+                  <div className="h-4 bg-slate-200 rounded w-24 mx-auto"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="text-5xl font-black text-indigo-600">
+                    {calculateOverallAverage().toFixed(1)}%
+                  </div>
+                  <p className="text-slate-500 mt-2">Overall Average</p>
+                  <button
+                    onClick={() => queryAI(`My overall average is ${calculateOverallAverage().toFixed(1)}%. What does this mean?`)}
+                    className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                    disabled={aiLoading}
+                  >
+                    Ask AI about this →
+                  </button>
+                </>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {loading ? (
+                <>
+                  <div className="animate-pulse p-4 bg-slate-50 rounded-xl">
+                    <div className="h-8 bg-slate-200 rounded mb-2"></div>
+                    <div className="h-4 bg-slate-200 rounded"></div>
+                  </div>
+                  <div className="animate-pulse p-4 bg-slate-50 rounded-xl">
+                    <div className="h-8 bg-slate-200 rounded mb-2"></div>
+                    <div className="h-4 bg-slate-200 rounded"></div>
+                  </div>
+                </>
+              ) : performanceData ? (
+                <>
+                  <div className="text-center p-4 bg-slate-50 rounded-xl">
+                    <div className="text-2xl font-black text-slate-800">{performanceData.rank}</div>
+                    <p className="text-sm text-slate-500">Class Rank</p>
+                    <button
+                      onClick={() => queryAI(`I am ranked ${performanceData.rank} in class. Analyze this ranking`)}
+                      className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                      disabled={aiLoading}
+                    >
+                      AI Analysis
+                    </button>
+                  </div>
+                  <div className="text-center p-4 bg-slate-50 rounded-xl">
+                    <div className="text-2xl font-black text-slate-800">+{performanceData.improvement}%</div>
+                    <p className="text-sm text-slate-500">Improvement</p>
+                    <button
+                      onClick={() => queryAI(`I improved by ${performanceData.improvement}%. Analyze my improvement trend`)}
+                      className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                      disabled={aiLoading}
+                    >
+                      AI Analysis
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center p-4 bg-slate-50 rounded-xl">
+                    <div className="text-2xl font-black text-slate-800">N/A</div>
+                    <p className="text-sm text-slate-500">Class Rank</p>
+                  </div>
+                  <div className="text-center p-4 bg-slate-50 rounded-xl">
+                    <div className="text-2xl font-black text-slate-800">N/A</div>
+                    <p className="text-sm text-slate-500">Improvement</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
-              <Phone size={20} />
-            </div>
-            <div>
-              <p className="font-bold text-slate-800">Schedule Call</p>
-              <p className="text-sm text-slate-500">Book appointment</p>
-            </div>
-          </div>
-        </Card>
+      {/* Performance Trend Card */}
+      <Card className="p-6">
+        <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+          <TrendingUp className="text-emerald-500" /> Performance Trend
+        </h2>
         
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
-              <Mail size={20} />
-            </div>
-            <div>
-              <p className="font-bold text-slate-800">Send Email</p>
-              <p className="text-sm text-slate-500">Direct email contact</p>
+        {loading ? (
+          <div className="animate-pulse">
+            <div className="flex items-end h-40 gap-2">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="flex-1 bg-slate-200 rounded-t-lg"></div>
+              ))}
             </div>
           </div>
-        </Card>
-        
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-purple-100 text-purple-600 rounded-xl">
-              <Calendar size={20} />
+        ) : monthlyTrend.length > 0 ? (
+          <>
+            <div className="flex items-end h-40 gap-2">
+              {monthlyTrend.map((month, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center group">
+                  <div 
+                    className="w-full bg-gradient-to-t from-indigo-400 to-indigo-600 rounded-t-lg transition-all duration-300 group-hover:opacity-80 cursor-pointer"
+                    style={{ height: `${month.score}%` }}
+                    onClick={() => queryAI(`In ${month.month}, I scored ${month.score}%. Analyze this performance.`)}
+                  />
+                  <span className="text-xs text-slate-500 mt-2">{month.month}</span>
+                </div>
+              ))}
             </div>
-            <div>
-              <p className="font-bold text-slate-800">Meeting Request</p>
-              <p className="text-sm text-slate-500">Request parent-teacher meeting</p>
+            
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() => queryAI("Analyze my performance trend over the last few months")}
+                className="px-6 py-3 border-2 border-indigo-200 text-indigo-700 font-bold rounded-lg hover:bg-indigo-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+                disabled={aiLoading}
+              >
+                <Brain size={18} />
+                Analyze Trend with AI
+              </button>
             </div>
+          </>
+        ) : (
+          <div className="text-center py-12 text-slate-500">
+            No trend data available
           </div>
-        </Card>
+        )}
+      </Card>
+
+      {/* Status Indicator */}
+      <div className="fixed bottom-4 right-4 flex items-center gap-3">
+        <div className={`px-3 py-2 rounded-lg flex items-center gap-2 ${
+          aiLoading ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+        }`}>
+          <div className={`h-2 w-2 rounded-full ${aiLoading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+          <span className="text-sm font-medium">
+            {aiLoading ? 'AI Processing...' : 'AI Ready'}
+          </span>
+        </div>
       </div>
     </div>
   );
 };
 
-export default TeacherCommunication;
+export default PerformanceAnalysis;

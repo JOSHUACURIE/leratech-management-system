@@ -1,4 +1,4 @@
-// src/components/common/Input.tsx
+
 import React from "react";
 
 type InputProps = {

@@ -1,30 +1,38 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef,type JSX } from 'react';
+import { NavLink, useLocation, useParams } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, BookOpen, Wallet, LineChart, 
   BarChart3, Bell, CreditCard, ClipboardCheck, Layers, 
   NotebookPen, TrendingUp, FileCheck2, FileText, Percent, 
   RotateCcw, Settings, AlertTriangle, User, ListChecks, 
   ShieldCheck, CalendarCheck, Calendar, Wrench, MessageSquare, 
-  ChevronRight, Receipt, GraduationCap, Menu, X, Terminal
+  ChevronRight, Receipt, GraduationCap, Menu, X, Terminal,
+  Home, LogOut, School
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 type SidebarProps = {
-  role: "ADMIN" | "TEACHER" | "PARENT" | "BURSAR";
+  role: "admin" | "teacher" | "parent" | "bursar" | "student" | "secretary" | "support_staff";
+  schoolSlug?: string;
 };
 
 type MenuItem = {
   label: string;
   path: string;
   icon: JSX.Element;
-  subItems?: string[];
+  subItems?: { label: string; path: string }[];
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ role }) => {
+const Sidebar: React.FC<SidebarProps> = ({ role, schoolSlug }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const location = useLocation();
+  const { school, logout } = useAuth();
   const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // Get school slug from params if not provided
+  const params = useParams<{ schoolSlug: string }>();
+  const actualSchoolSlug = schoolSlug || params.schoolSlug || '';
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -50,60 +58,115 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
     setOpenSubmenu(openSubmenu === label ? null : label);
   };
 
+  // Helper function to build paths with school slug
+  const buildPath = (basePath: string) => {
+    if (!actualSchoolSlug) return basePath;
+    // Remove leading slash if present
+    const cleanBase = basePath.startsWith('/') ? basePath.slice(1) : basePath;
+    return `/${actualSchoolSlug}/${cleanBase}`;
+  };
+
   const menus: Record<string, MenuItem[]> = {
-    ADMIN: [
-      { label: "Dashboard", path: "/admin/dashboard", icon: <LayoutDashboard size={20} /> },
-      { label: "User Accounts", path: "/admin/users", icon: <ShieldCheck size={20} />, subItems: ["Admins", "Teachers", "Students", "Parents"] },
-      { label: "Academic Setup", path: "/admin/academic-setup", icon: <GraduationCap size={20} /> },
-      { label: "Fee Management", path: "/admin/fees", icon: <Wallet size={20} /> },
-      { label: "Student Registry", path: "/admin/students", icon: <Users size={20} /> },
-      { label: "Performance", path: "/admin/results", icon: <LineChart size={20} /> },
-      { label: "System Reports", path: "/admin/reports", icon: <BarChart3 size={20} /> },
-      { label: "School Settings", path: "/admin/settings", icon: <Settings size={20} /> },
-      { label: "Audit Logs", path: "/admin/logs", icon: <Terminal size={20} /> },
-      { label: "Core Utilities", path: "/admin/tools", icon: <Wrench size={20} /> },
+    admin: [
+      { label: "Dashboard", path: buildPath("admin/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { 
+        label: "User Accounts", 
+        path: buildPath("admin/users"), 
+        icon: <ShieldCheck size={20} />, 
+        subItems: [
+          { label: "All Users", path: buildPath("admin/users") },
+          { label: "Teachers", path: buildPath("admin/users/teachers") },
+          { label: "Students", path: buildPath("admin/students") },
+          { label: "Parents", path: buildPath("admin/parents") }
+        ] 
+      },
+      { label: "Academic Setup", path: buildPath("admin/academic-setup"), icon: <GraduationCap size={20} /> },
+      { label: "Fee Management", path: buildPath("admin/fees"), icon: <Wallet size={20} /> },
+      { label: "Student Registry", path: buildPath("admin/students"), icon: <Users size={20} /> },
+      { label: "Performance", path: buildPath("admin/results"), icon: <LineChart size={20} /> },
+      { label: "System Reports", path: buildPath("admin/reports"), icon: <BarChart3 size={20} /> },
+      { label: "School Settings", path: buildPath("admin/settings"), icon: <Settings size={20} /> },
+      { label: "Audit Logs", path: buildPath("admin/logs"), icon: <Terminal size={20} /> },
+      { label: "Core Utilities", path: buildPath("admin/tools"), icon: <Wrench size={20} /> },
     ],
-    TEACHER: [
-      { label: "Dashboard", path: "/teacher/dashboard", icon: <LayoutDashboard size={20} /> },
-      { label: "My Classes", path: "/teacher/classes", icon: <Users size={20} /> },
-      { label: "Subjects Assigned", path: "/teacher/subjects", icon: <BookOpen size={20} /> },
-      { label: "Score Submission", path: "/teacher/scores", icon: <ClipboardCheck size={20} /> },
-      { label: "CBC Assessment", path: "/teacher/cbc", icon: <Layers size={20} /> },
-      { label: "Performance Analysis", path: "/teacher/performance", icon: <LineChart size={20} /> },
-      { label: "Attendance", path: "/teacher/attendance", icon: <CalendarCheck size={20} /> },
-      { label: "Lesson Plans", path: "/teacher/lesson-plans", icon: <NotebookPen size={20} /> },
-      { label: "Assignments", path: "/teacher/assignments", icon: <FileText size={20} /> },
-      { label: "Notices", path: "/teacher/notices", icon: <Bell size={20} /> },
+    teacher: [
+      { label: "Dashboard", path: buildPath("teacher/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "My Classes", path: buildPath("teacher/classes"), icon: <Users size={20} /> },
+      { label: "Subjects Assigned", path: buildPath("teacher/subjects"), icon: <BookOpen size={20} /> },
+      { label: "Score Submission", path: buildPath("teacher/scores"), icon: <ClipboardCheck size={20} /> },
+      { label: "CBC Assessment", path: buildPath("teacher/cbc"), icon: <Layers size={20} /> },
+      { label: "Performance Analysis", path: buildPath("teacher/performance"), icon: <LineChart size={20} /> },
+      { label: "Attendance", path: buildPath("teacher/attendance"), icon: <CalendarCheck size={20} /> },
+      { label: "Lesson Plans", path: buildPath("teacher/lesson-plans"), icon: <NotebookPen size={20} /> },
+      { label: "Assignments", path: buildPath("teacher/assignments"), icon: <FileText size={20} /> },
+      { label: "Notices", path: buildPath("teacher/notices"), icon: <Bell size={20} /> },
     ],
-    PARENT: [
-      { label: "Dashboard", path: "/parent/dashboard", icon: <LayoutDashboard size={20} /> },
-      { label: "Results", path: "/parent/results", icon: <LineChart size={20} /> },
-      { label: "Fee Balance", path: "/parent/fees", icon: <Wallet size={20} /> },
-      { label: "Payments History", path: "/parent/payments", icon: <Receipt size={20} /> },
-      { label: "Attendance", path: "/parent/attendance", icon: <CalendarCheck size={20} /> },
-      { label: "Homework & Assignments", path: "/parent/homework", icon: <BookOpen size={20} /> },
-      { label: "Performance Analytics", path: "/parent/performance", icon: <BarChart3 size={20} /> },
-      { label: "Teacher Communication", path: "/parent/messages", icon: <MessageSquare size={20} /> },
-      { label: "Notifications", path: "/parent/notifications", icon: <Bell size={20} /> },
-      { label: "School Calendar", path: "/parent/calendar", icon: <Calendar size={20} /> },
-      { label: "Profile Settings", path: "/parent/profile", icon: <User size={20} /> },
+    parent: [
+      { label: "Dashboard", path: buildPath("parent/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "Results", path: buildPath("parent/results"), icon: <LineChart size={20} /> },
+      { label: "Fee Balance", path: buildPath("parent/fees"), icon: <Wallet size={20} /> },
+      { label: "Payments History", path: buildPath("parent/payments"), icon: <Receipt size={20} /> },
+      { label: "Attendance", path: buildPath("parent/attendance"), icon: <CalendarCheck size={20} /> },
+      { label: "Homework & Assignments", path: buildPath("parent/homework"), icon: <BookOpen size={20} /> },
+      { label: "Performance Analytics", path: buildPath("parent/performance"), icon: <BarChart3 size={20} /> },
+      { label: "Teacher Communication", path: buildPath("parent/messages"), icon: <MessageSquare size={20} /> },
+      { label: "Notifications", path: buildPath("parent/notifications"), icon: <Bell size={20} /> },
+      { label: "School Calendar", path: buildPath("parent/calendar"), icon: <Calendar size={20} /> },
+      { label: "Profile Settings", path: buildPath("parent/profile"), icon: <User size={20} /> },
     ],
-    BURSAR: [
-      { label: "Dashboard", path: "/bursar/dashboard", icon: <LayoutDashboard size={20} /> },
-      { label: "Record Payments", path: "/bursar/payments", icon: <Wallet size={20} /> },
-      { label: "Fee Structures", path: "/bursar/fee-structure", icon: <FileText size={20} /> },
-      { label: "Student Balances", path: "/bursar/balances", icon: <Users size={20} /> },
-      { label: "Invoices", path: "/bursar/invoices", icon: <Receipt size={20} /> },
-      { label: "Payment History", path: "/bursar/history", icon: <ListChecks size={20} /> },
-      { label: "Fee Arrears", path: "/bursar/arrears", icon: <AlertTriangle size={20} /> },
-      { label: "Scholarships / Discounts", path: "/bursar/discounts", icon: <Percent size={20} /> },
-      { label: "Refunds", path: "/bursar/refunds", icon: <RotateCcw size={20} /> },
-      { label: "Financial Reports", path: "/bursar/reports", icon: <BarChart3 size={20} /> },
-      { label: "MPESA / Bank Reconciliation", path: "/bursar/reconciliation", icon: <CreditCard size={20} /> },
+    bursar: [
+      { label: "Dashboard", path: buildPath("bursar/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "Record Payments", path: buildPath("bursar/payments"), icon: <Wallet size={20} /> },
+      { label: "Fee Structures", path: buildPath("bursar/fee-structure"), icon: <FileText size={20} /> },
+      { label: "Student Balances", path: buildPath("bursar/balances"), icon: <Users size={20} /> },
+      { label: "Invoices", path: buildPath("bursar/invoices"), icon: <Receipt size={20} /> },
+      { label: "Payment History", path: buildPath("bursar/history"), icon: <ListChecks size={20} /> },
+      { label: "Fee Arrears", path: buildPath("bursar/arrears"), icon: <AlertTriangle size={20} /> },
+      { label: "Scholarships / Discounts", path: buildPath("bursar/discounts"), icon: <Percent size={20} /> },
+      { label: "Refunds", path: buildPath("bursar/refunds"), icon: <RotateCcw size={20} /> },
+      { label: "Financial Reports", path: buildPath("bursar/reports"), icon: <BarChart3 size={20} /> },
+      { label: "MPESA / Bank Reconciliation", path: buildPath("bursar/reconciliation"), icon: <CreditCard size={20} /> },
+    ],
+    student: [
+      { label: "Dashboard", path: buildPath("student/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "My Classes", path: buildPath("student/classes"), icon: <Users size={20} /> },
+      { label: "My Subjects", path: buildPath("student/subjects"), icon: <BookOpen size={20} /> },
+      { label: "My Results", path: buildPath("student/results"), icon: <LineChart size={20} /> },
+      { label: "Attendance", path: buildPath("student/attendance"), icon: <CalendarCheck size={20} /> },
+      { label: "Homework", path: buildPath("student/homework"), icon: <FileText size={20} /> },
+      { label: "Assignments", path: buildPath("student/assignments"), icon: <ClipboardCheck size={20} /> },
+      { label: "Exams", path: buildPath("student/exams"), icon: <NotebookPen size={20} /> },
+      { label: "Fee Statement", path: buildPath("student/fees"), icon: <Wallet size={20} /> },
+      { label: "Timetable", path: buildPath("student/timetable"), icon: <Calendar size={20} /> },
+      { label: "Messages", path: buildPath("student/messages"), icon: <MessageSquare size={20} /> },
+      { label: "Notifications", path: buildPath("student/notifications"), icon: <Bell size={20} /> },
+    ],
+    secretary: [
+      { label: "Dashboard", path: buildPath("secretary/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "Student Records", path: buildPath("secretary/students"), icon: <Users size={20} /> },
+      { label: "Parent Records", path: buildPath("secretary/parents"), icon: <User size={20} /> },
+      { label: "Attendance Records", path: buildPath("secretary/attendance"), icon: <CalendarCheck size={20} /> },
+      { label: "Document Management", path: buildPath("secretary/documents"), icon: <FileText size={20} /> },
+      { label: "Communication", path: buildPath("secretary/communication"), icon: <MessageSquare size={20} /> },
+      { label: "Calendar", path: buildPath("secretary/calendar"), icon: <Calendar size={20} /> },
+    ],
+    support_staff: [
+      { label: "Dashboard", path: buildPath("support/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "Maintenance Log", path: buildPath("support/maintenance"), icon: <Wrench size={20} /> },
+      { label: "Inventory", path: buildPath("support/inventory"), icon: <ListChecks size={20} /> },
+      { label: "Requests", path: buildPath("support/requests"), icon: <Bell size={20} /> },
+      { label: "Reports", path: buildPath("support/reports"), icon: <BarChart3 size={20} /> },
     ]
   };
 
   const currentMenus = menus[role] || [];
+
+  const handleLogout = () => {
+    logout();
+    if (window.innerWidth < 1024) {
+      setIsMobileOpen(false);
+    }
+  };
 
   return (
     <>
@@ -135,19 +198,31 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
           ${isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}
         `}
       >
-        {/* Brand Header */}
+        {/* Brand Header with School Info */}
         <div className="p-6 pb-4 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl blur opacity-20 group-hover:opacity-30 transition-opacity"></div>
                 <div className="relative w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">
-                  LT
+                  {school?.logo_url ? (
+                    <img 
+                      src={school.logo_url} 
+                      alt={school.name} 
+                      className="w-full h-full rounded-xl object-cover"
+                    />
+                  ) : (
+                    school?.name?.charAt(0) || 'LT'
+                  )}
                 </div>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900 leading-tight">LeraTech</h1>
-                <p className="text-xs text-gray-500 font-medium">Management System</p>
+                <h1 className="text-xl font-bold text-gray-900 leading-tight truncate max-w-[140px]">
+                  {school?.name || 'LeraTech'}
+                </h1>
+                <p className="text-xs text-gray-500 font-medium truncate max-w-[140px]">
+                  {actualSchoolSlug}.ac.ke
+                </p>
               </div>
             </div>
             <button 
@@ -158,17 +233,27 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
               <X size={20} className="text-gray-500" />
             </button>
           </div>
-          <div className="mt-4 px-1">
+          
+          <div className="mt-4 px-1 flex items-center justify-between">
             <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100">
               <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
-                {role.toLowerCase()} panel
+                {role.toLowerCase()} portal
               </span>
             </div>
+            
+            {/* Quick school portal link */}
+            <NavLink 
+              to={actualSchoolSlug ? `/${actualSchoolSlug}` : '/'}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              title="School Portal Home"
+            >
+              <Home size={16} className="text-gray-500" />
+            </NavLink>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 scrollbar-hide">
           <div className="mb-4 px-3">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Main Navigation
@@ -180,7 +265,8 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const isSubOpen = openSubmenu === item.label;
               const isActive = location.pathname === item.path || 
-                               (item.path !== '/admin/dashboard' && location.pathname.startsWith(item.path));
+                               (item.path !== buildPath(`${role}/dashboard`) && 
+                                location.pathname.startsWith(item.path.replace(/\/$/, '')));
 
               return (
                 <div key={item.label} className="relative">
@@ -198,19 +284,20 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
                           toggleSubmenu(item.label);
                         }
                       }}
-                      className={`
+                      className={({ isActive: navIsActive }) => `
                         flex items-center justify-between w-full px-4 py-3 rounded-xl
                         transition-all duration-200 group
-                        ${isActive 
+                        ${(navIsActive || isActive) 
                           ? 'bg-gradient-to-r from-blue-50/80 to-purple-50/50 text-blue-700 font-semibold' 
                           : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                         }
                       `}
+                      end={!hasSubItems}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`
                           p-1.5 rounded-lg transition-colors
-                          ${isActive 
+                          ${(isActive) 
                             ? 'bg-gradient-to-br from-blue-500 to-purple-500 text-white' 
                             : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
                           }
@@ -237,7 +324,8 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
                         {item.subItems?.map((subItem, idx) => (
                           <NavLink
                             key={idx}
-                            to={`${item.path}/${subItem.toLowerCase().replace(/\s+/g, '-')}`}
+                            to={subItem.path}
+                            end
                             className={({ isActive }) => `
                               block px-4 py-2.5 rounded-lg text-sm transition-all
                               ${isActive 
@@ -251,7 +339,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
                               }
                             }}
                           >
-                            {subItem}
+                            {subItem.label}
                           </NavLink>
                         ))}
                       </div>
@@ -263,18 +351,41 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
           </div>
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-100">
-          <div className="px-4 py-3 bg-gray-50 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-gray-700">Need help?</p>
-                <p className="text-xs text-gray-500">Contact support</p>
+        {/* Footer with School Info and Actions */}
+        <div className="p-4 border-t border-gray-100 space-y-3">
+          {/* School Info Card */}
+          {school && (
+            <div className="px-4 py-3 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center flex-shrink-0">
+                  <School size={18} className="text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700 truncate">{school.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{school.school_code}</p>
+                </div>
               </div>
-              <button className="p-2 hover:bg-white rounded-lg transition-colors">
-                <Bell size={16} className="text-gray-500" />
-              </button>
             </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              onClick={handleLogout}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 text-rose-700 font-medium hover:from-rose-100 hover:to-pink-100 transition-all text-sm"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+            
+            <NavLink 
+              to={actualSchoolSlug ? `/${actualSchoolSlug}/support` : '/support'}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 text-gray-700 font-medium hover:bg-gray-100 transition-all text-sm"
+              onClick={() => window.innerWidth < 1024 && setIsMobileOpen(false)}
+            >
+              <Bell size={16} />
+              Help
+            </NavLink>
           </div>
         </div>
       </aside>
@@ -298,6 +409,13 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         .scrollbar-hide {
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
+        }
+        
+        /* Active nav link styles */
+        .nav-link-active {
+          background: linear-gradient(90deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.05));
+          color: rgb(37, 99, 235);
+          font-weight: 600;
         }
       `}</style>
     </>

@@ -11,7 +11,7 @@ import {
   Loader2
 } from "lucide-react";
 
-/* ---------------- TYPES ---------------- */
+
 type Student = {
   id: string;
   admissionNo: string;
@@ -64,7 +64,7 @@ const ScoreSubmission: React.FC = () => {
     }, 1500);
   };
 
-  // Calculate stats for the summary bar
+
   const entriesCount = students.filter(s => s.score !== "").length;
   const averageScore = entriesCount > 0 
     ? (students.reduce((acc, s) => acc + (Number(s.score) || 0), 0) / entriesCount).toFixed(1)
@@ -96,7 +96,6 @@ const ScoreSubmission: React.FC = () => {
         )}
       </div>
 
-      {/* Selectors & Filters */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <Card className="lg:col-span-4 border-none shadow-xl shadow-slate-200/50 rounded-[2rem] p-6 space-y-6">
           <div className="flex items-center gap-2 mb-2">
@@ -131,11 +130,11 @@ const ScoreSubmission: React.FC = () => {
           </div>
         </Card>
 
-        {/* Data Table */}
+        
         <div className="lg:col-span-8">
           {students.length > 0 ? (
             <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] p-0 overflow-hidden bg-white">
-              {/* Table Search Header */}
+              
               <div className="p-6 border-b border-slate-50 flex items-center justify-between gap-4">
                  <div className="relative flex-1 max-w-xs">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -211,7 +210,7 @@ const ScoreSubmission: React.FC = () => {
                 </table>
               </div>
 
-              {/* Sticky Footer for Table */}
+              
               <div className="p-6 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
                 <p className="text-xs font-bold text-slate-400 italic">
                   Tip: Use <kbd className="bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm not-italic">TAB</kbd> to move quickly between students.

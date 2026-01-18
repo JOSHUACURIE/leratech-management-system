@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-/* ---------------- MOCK DATA ---------------- */
 
 const myClasses = [
   {
@@ -138,7 +137,7 @@ const MyClasses: React.FC = () => {
               </div>
             </div>
 
-            {/* Subtle Decorative Background Element */}
+          
             <div className="absolute -bottom-6 -left-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
                <GraduationCap size={150} />
             </div>
@@ -149,7 +148,7 @@ const MyClasses: React.FC = () => {
   );
 };
 
-// Internal icon for the background decoration
+
 const GraduationCap = ({ size }: { size: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
 );
