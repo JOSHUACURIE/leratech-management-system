@@ -13,6 +13,7 @@ import StudentManagement from "./pages/admin/StudentManagement";
 import SchoolSettings from "./pages/admin/SchoolSettings";
 import AuditLogs from "./pages/admin/AuditLogs";
 import ToolsUtilities from "./pages/admin/ToolsUtilities";
+import Teachers from "./pages/admin/Teacher";
 
 // Teacher Pages
 import TeacherDashboard from "./pages/teacher/Dashboard";
@@ -81,7 +82,7 @@ function App() {
           <Route path="users/teachers" element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <DashboardLayout role="admin">
-                <CreateUserForm />
+                <Teachers />
               </DashboardLayout>
             </ProtectedRoute>
           } />

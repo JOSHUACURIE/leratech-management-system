@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { 
   Plus, Settings, BookOpen, Layers, Calendar, GraduationCap, 
-  Percent, Trash2, Loader2, X, AlertCircle, Edit3, Save 
+  Percent, Trash2, Loader2, X, AlertCircle, Edit3, Save,
+  ChevronDown, Clock, Calendar as CalendarIcon
 } from "lucide-react";
 import Card from "../../components/common/Card";
 import api from "../../services/api";
@@ -21,14 +22,23 @@ const AcademicSetup: React.FC = () => {
   const [showModal, setShowModal] = useState<string | null>(null); 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
+    // Class
     className: "", classLevel: "",
+    // Stream
     streamName: "", classId: "",
-    // Subject fields updated to match controller
+    // Subject
     name: "", code: "", category: "",
-    yearName: "", yearStart: "", yearEnd: "",
-    termName: "", academicYearId: "", termStart: "", termEnd: "",
+    // Academic Year
+    yearName: "", yearStart: "", yearEnd: "", isCurrentYear: false,
+    // Term
+    termName: "", academicYearId: "", termStart: "", termEnd: "", 
+    feeDeadline: "", isCurrentTerm: false,
+    // Grade
     grade: "", minScore: "", maxScore: "", points: "", comment: ""
   });
+
+  // Term management state
+  const [selectedYearForTerms, setSelectedYearForTerms] = useState<string>("");
 
   useEffect(() => {
     fetchAcademicData();
@@ -50,7 +60,16 @@ const AcademicSetup: React.FC = () => {
       setClasses(unwrap(classRes));
       setStreams(unwrap(streamRes));
       setSubjects(unwrap(subjectRes));
-      setAcademicYears(unwrap(yearRes));
+      
+      const yearsData = unwrap(yearRes);
+      setAcademicYears(yearsData);
+      
+      // Set default selected year for terms view
+      if (yearsData.length > 0 && !selectedYearForTerms) {
+        const currentYear = yearsData.find((y: any) => y.is_current);
+        setSelectedYearForTerms(currentYear?.id || yearsData[0].id);
+      }
+      
       setGradingSystem(unwrap(gradeRes));
 
     } catch (err) {
@@ -74,7 +93,6 @@ const AcademicSetup: React.FC = () => {
         isEdit ? await api.put(`/streams/${editingId}`, payload) : await api.post('/streams', payload);
       }
       else if (showModal === 'Subject') {
-        // Updated to match controller field names
         const payload = { 
           name: formData.name, 
           code: formData.code,
@@ -85,6 +103,36 @@ const AcademicSetup: React.FC = () => {
           await api.put(`/subjects/${editingId}`, payload);
         } else {
           await api.post('/subjects', payload);
+        }
+      }
+      else if (showModal === 'Academic Year') {
+        const payload = { 
+          year_name: formData.yearName,
+          start_date: formData.yearStart,
+          end_date: formData.yearEnd,
+          is_current: formData.isCurrentYear
+        };
+        
+        if (isEdit) {
+          await api.put(`/academic/years/${editingId}`, payload);
+        } else {
+          await api.post('/academic/years', payload);
+        }
+      }
+      else if (showModal === 'Term') {
+        const payload = {
+          academic_year_id: formData.academicYearId,
+          term_name: formData.termName,
+          start_date: formData.termStart,
+          end_date: formData.termEnd,
+          fee_deadline: formData.feeDeadline || null,
+          is_current: formData.isCurrentTerm
+        };
+        
+        if (isEdit) {
+          await api.put(`/academic/terms/${editingId}`, payload);
+        } else {
+          await api.post('/academic/terms', payload);
         }
       }
       else if (showModal === 'Grade') {
@@ -125,15 +173,14 @@ const AcademicSetup: React.FC = () => {
         classLevel: item.class_level?.toString() || ""
       });
     }
-    if (type === 'Stream') {
+    else if (type === 'Stream') {
       setFormData({
         ...formData, 
         streamName: item.name, 
         classId: item.class_id
       });
     }
-    if (type === 'Subject') {
-      // Updated to match controller response
+    else if (type === 'Subject') {
       setFormData({
         ...formData,
         name: item.name || "",
@@ -141,7 +188,27 @@ const AcademicSetup: React.FC = () => {
         category: item.category || ""
       });
     }
-    if (type === 'Grade') {
+    else if (type === 'Academic Year') {
+      setFormData({
+        ...formData,
+        yearName: item.year_name || "",
+        yearStart: item.start_date ? new Date(item.start_date).toISOString().split('T')[0] : "",
+        yearEnd: item.end_date ? new Date(item.end_date).toISOString().split('T')[0] : "",
+        isCurrentYear: item.is_current || false
+      });
+    }
+    else if (type === 'Term') {
+      setFormData({
+        ...formData,
+        termName: item.term_name || "",
+        academicYearId: item.academic_year_id || "",
+        termStart: item.start_date ? new Date(item.start_date).toISOString().split('T')[0] : "",
+        termEnd: item.end_date ? new Date(item.end_date).toISOString().split('T')[0] : "",
+        feeDeadline: item.fee_deadline ? new Date(item.fee_deadline).toISOString().split('T')[0] : "",
+        isCurrentTerm: item.is_current || false
+      });
+    }
+    else if (type === 'Grade') {
       setFormData({
         ...formData, 
         grade: item.grade, 
@@ -159,13 +226,33 @@ const AcademicSetup: React.FC = () => {
     setShowModal(null);
     setEditingId(null);
     setFormData({
-      className: "", classLevel: "", 
+      className: "", classLevel: "",
       streamName: "", classId: "",
       name: "", code: "", category: "",
-      yearName: "", yearStart: "", yearEnd: "",
+      yearName: "", yearStart: "", yearEnd: "", isCurrentYear: false,
       termName: "", academicYearId: "", termStart: "", termEnd: "",
+      feeDeadline: "", isCurrentTerm: false,
       grade: "", minScore: "", maxScore: "", points: "", comment: ""
     });
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const getCurrentYear = () => {
+    return academicYears.find(y => y.is_current);
+  };
+
+  const getSelectedYearTerms = () => {
+    if (!selectedYearForTerms) return [];
+    const year = academicYears.find(y => y.id === selectedYearForTerms);
+    return year?.terms || [];
   };
 
   if (loading) return (
@@ -278,6 +365,130 @@ const AcademicSetup: React.FC = () => {
           </div>
         </Card>
 
+        {/* Academic Years Section */}
+        <Card className="p-8 bg-white rounded-[2rem] border-none shadow-xl shadow-slate-200/50">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <CalendarIcon className="text-violet-600" />
+              <h3 className="font-black text-slate-800">Academic Years</h3>
+              <span className="text-sm font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+                {academicYears.length}
+              </span>
+            </div>
+            <button onClick={() => setShowModal('Academic Year')} className="bg-violet-50 text-violet-600 p-2 rounded-xl hover:bg-violet-100 transition-all">
+              <Plus size={20} />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
+            {academicYears.map(year => (
+              <div key={year.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-violet-200 hover:bg-slate-100/50">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-700 truncate">
+                      {year.year_name}
+                      {year.is_current && (
+                        <span className="ml-2 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          CURRENT
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Clock size={10} />
+                      {formatDate(year.start_date)} - {formatDate(year.end_date)}
+                    </span>
+                    <span className="text-[10px] font-bold">
+                      {year._count?.terms || year.terms?.length || 0} terms
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => openEditModal('Academic Year', year)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit3 size={16}/></button>
+                  <button onClick={() => handleDelete('/academic/years', year.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Terms Section */}
+        <Card className="p-8 bg-white rounded-[2rem] border-none shadow-xl shadow-slate-200/50">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <Clock className="text-rose-600" />
+              <h3 className="font-black text-slate-800">Terms</h3>
+              <span className="text-sm font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+                {getSelectedYearTerms().length}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={selectedYearForTerms}
+                onChange={(e) => setSelectedYearForTerms(e.target.value)}
+                className="text-xs font-bold bg-slate-50 border-none rounded-xl px-3 py-1.5 outline-none"
+              >
+                {academicYears.map(year => (
+                  <option key={year.id} value={year.id}>
+                    {year.year_name} {year.is_current ? "(Current)" : ""}
+                  </option>
+                ))}
+              </select>
+              <button 
+                onClick={() => {
+                  if (!selectedYearForTerms) {
+                    alert("Please select an academic year first");
+                    return;
+                  }
+                  setFormData({...formData, academicYearId: selectedYearForTerms});
+                  setShowModal('Term');
+                }} 
+                className="bg-rose-50 text-rose-600 p-2 rounded-xl hover:bg-rose-100 transition-all"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
+            {getSelectedYearTerms().map(term => (
+              <div key={term.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-rose-200 hover:bg-slate-100/50">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-700 truncate">
+                      {term.term_name}
+                      {term.is_current && (
+                        <span className="ml-2 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          ACTIVE
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {formatDate(term.start_date)} → {formatDate(term.end_date)}
+                    </span>
+                    {term.fee_deadline && (
+                      <span className="text-[10px] text-rose-500 font-bold">
+                        Fees due: {formatDate(term.fee_deadline)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => openEditModal('Term', term)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit3 size={16}/></button>
+                  <button onClick={() => handleDelete('/academic/terms', term.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
+                </div>
+              </div>
+            ))}
+            {getSelectedYearTerms().length === 0 && (
+              <div className="text-center py-8 text-slate-400">
+                <CalendarIcon className="mx-auto mb-2" size={24} />
+                <p className="text-sm font-medium">No terms for selected year</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
         {/* Grading Section - Full width */}
         <Card className="lg:col-span-3 p-8 bg-white rounded-[2.5rem] border-none shadow-xl shadow-slate-200/50">
           <div className="flex justify-between items-center mb-6">
@@ -336,6 +547,7 @@ const AcademicSetup: React.FC = () => {
             </h2>
 
             <div className="space-y-4">
+              {/* Class Form */}
               {showModal === 'Class' && (
                 <>
                   <input 
@@ -354,6 +566,7 @@ const AcademicSetup: React.FC = () => {
                 </>
               )}
 
+              {/* Stream Form */}
               {showModal === 'Stream' && (
                 <>
                   <select 
@@ -373,6 +586,7 @@ const AcademicSetup: React.FC = () => {
                 </>
               )}
 
+              {/* Subject Form */}
               {showModal === 'Subject' && (
                 <>
                   <input 
@@ -398,6 +612,121 @@ const AcademicSetup: React.FC = () => {
                 </>
               )}
 
+              {/* Academic Year Form */}
+              {showModal === 'Academic Year' && (
+                <>
+                  <input 
+                    placeholder="Year Name (e.g., 2024-2025)" 
+                    className="w-full p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                    value={formData.yearName} 
+                    onChange={e => setFormData({...formData, yearName: e.target.value})}
+                    required
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Start Date</label>
+                      <input 
+                        type="date" 
+                        className="w-full mt-2 p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                        value={formData.yearStart} 
+                        onChange={e => setFormData({...formData, yearStart: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">End Date</label>
+                      <input 
+                        type="date" 
+                        className="w-full mt-2 p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                        value={formData.yearEnd} 
+                        onChange={e => setFormData({...formData, yearEnd: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.isCurrentYear}
+                      onChange={e => setFormData({...formData, isCurrentYear: e.target.checked})}
+                      className="w-5 h-5 rounded"
+                    />
+                    <span className="font-bold text-slate-700">Set as current academic year</span>
+                  </label>
+                </>
+              )}
+
+              {/* Term Form */}
+              {showModal === 'Term' && (
+                <>
+                  <div className="mb-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Academic Year</label>
+                    <select 
+                      className="w-full mt-2 p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                      value={formData.academicYearId} 
+                      onChange={e => setFormData({...formData, academicYearId: e.target.value})}
+                      disabled={!!editingId}
+                      required
+                    >
+                      <option value="">Select Academic Year</option>
+                      {academicYears.map(year => (
+                        <option key={year.id} value={year.id}>
+                          {year.year_name} {year.is_current ? "(Current)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <input 
+                    placeholder="Term Name (e.g., Term 1)" 
+                    className="w-full p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                    value={formData.termName} 
+                    onChange={e => setFormData({...formData, termName: e.target.value})}
+                    required
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Start Date</label>
+                      <input 
+                        type="date" 
+                        className="w-full mt-2 p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                        value={formData.termStart} 
+                        onChange={e => setFormData({...formData, termStart: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">End Date</label>
+                      <input 
+                        type="date" 
+                        className="w-full mt-2 p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                        value={formData.termEnd} 
+                        onChange={e => setFormData({...formData, termEnd: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Fee Deadline (Optional)</label>
+                    <input 
+                      type="date" 
+                      className="w-full mt-2 p-4 bg-slate-50 rounded-2xl border-none font-bold" 
+                      value={formData.feeDeadline} 
+                      onChange={e => setFormData({...formData, feeDeadline: e.target.value})}
+                    />
+                  </div>
+                  <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.isCurrentTerm}
+                      onChange={e => setFormData({...formData, isCurrentTerm: e.target.checked})}
+                      className="w-5 h-5 rounded"
+                    />
+                    <span className="font-bold text-slate-700">Set as current term</span>
+                  </label>
+                </>
+              )}
+
+              {/* Grade Form */}
               {showModal === 'Grade' && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
