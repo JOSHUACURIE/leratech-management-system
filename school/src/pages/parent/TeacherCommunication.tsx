@@ -89,14 +89,14 @@ const PerformanceAnalysis: React.FC = () => {
     
     try {
       // Fetch student info (using student ID 1 for now)
-      const studentResponse = await fetch('http://localhost:3000/api/v1/students/1');
+      const studentResponse = await fetch('http://localhost:3000/api/v1/student/1');
       const studentData = await studentResponse.json();
       
       if (studentData.success) {
         setStudentInfo(studentData.data);
         
         // Fetch subject scores
-        const subjectsResponse = await fetch('http://localhost:3000/api/v1/students/1/subjects');
+        const subjectsResponse = await fetch('http://localhost:3000/api/v1/student/1/subjects');
         const subjectsData = await subjectsResponse.json();
         
         if (subjectsData.success) {
@@ -104,7 +104,7 @@ const PerformanceAnalysis: React.FC = () => {
         }
         
         // Fetch performance data
-        const performanceResponse = await fetch('http://localhost:3000/api/v1/students/1/performance');
+        const performanceResponse = await fetch('http://localhost:3000/api/v1/student/1/performance');
         const performanceData = await performanceResponse.json();
         
         if (performanceData.success) {

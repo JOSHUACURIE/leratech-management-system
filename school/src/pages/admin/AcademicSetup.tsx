@@ -7,34 +7,140 @@ import {
 import Card from "../../components/common/Card";
 import api from "../../services/api";
 
+// Type Definitions
+interface Class {
+  id: string;
+  class_name: string;
+  class_level: number;
+}
+
+interface Stream {
+  id: string;
+  name: string;
+  class_id: string;
+  class?: Class;
+}
+
+interface Subject {
+  id: string;
+  name: string;
+  code?: string;
+  subject_code?: string;
+  category?: string;
+}
+
+interface Term {
+  id: string;
+  term_name: string;
+  academic_year_id: string;
+  start_date: string;
+  end_date: string;
+  fee_deadline?: string;
+  is_current: boolean;
+}
+
+interface AcademicYear {
+  id: string;
+  year_name: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  terms: Term[];
+  _count?: {
+    terms: number;
+  };
+}
+
+interface Grade {
+  id: string;
+  grade: string;
+  min_score: number;
+  max_score: number;
+  points: number;
+  description: string;
+}
+
+interface GradingSystem {
+  id: string;
+  name: string;
+  grades: Grade[];
+}
+
+// Form Data Type
+interface FormData {
+  // Class
+  className: string;
+  classLevel: string;
+  // Stream
+  streamName: string;
+  classId: string;
+  // Subject
+  name: string;
+  code: string;
+  category: string;
+  // Academic Year
+  yearName: string;
+  yearStart: string;
+  yearEnd: string;
+  isCurrentYear: boolean;
+  // Term
+  termName: string;
+  academicYearId: string;
+  termStart: string;
+  termEnd: string;
+  feeDeadline: string;
+  isCurrentTerm: boolean;
+  // Grade
+  grade: string;
+  minScore: string;
+  maxScore: string;
+  points: string;
+  comment: string;
+}
+
 const AcademicSetup: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   
   // Data State
-  const [classes, setClasses] = useState<any[]>([]);
-  const [streams, setStreams] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
-  const [academicYears, setAcademicYears] = useState<any[]>([]);
-  const [gradingSystem, setGradingSystem] = useState<any>(null);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [streams, setStreams] = useState<Stream[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
+  const [gradingSystem, setGradingSystem] = useState<GradingSystem | null>(null);
 
   // Modal & Form State
   const [showModal, setShowModal] = useState<string | null>(null); 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     // Class
-    className: "", classLevel: "",
+    className: "",
+    classLevel: "",
     // Stream
-    streamName: "", classId: "",
+    streamName: "",
+    classId: "",
     // Subject
-    name: "", code: "", category: "",
+    name: "",
+    code: "",
+    category: "",
     // Academic Year
-    yearName: "", yearStart: "", yearEnd: "", isCurrentYear: false,
+    yearName: "",
+    yearStart: "",
+    yearEnd: "",
+    isCurrentYear: false,
     // Term
-    termName: "", academicYearId: "", termStart: "", termEnd: "", 
-    feeDeadline: "", isCurrentTerm: false,
+    termName: "",
+    academicYearId: "",
+    termStart: "",
+    termEnd: "",
+    feeDeadline: "",
+    isCurrentTerm: false,
     // Grade
-    grade: "", minScore: "", maxScore: "", points: "", comment: ""
+    grade: "",
+    minScore: "",
+    maxScore: "",
+    points: "",
+    comment: ""
   });
 
   // Term management state
@@ -51,26 +157,29 @@ const AcademicSetup: React.FC = () => {
         api.get('/classes'),
         api.get('/streams'),
         api.get('/subjects'),
-        api.get('/academic/years'),
-        api.get('/grading/default')
+        api.get('/academic/years-with-terms'), 
+        api.get('/grading')
       ]);
 
-      const unwrap = (res: any) => (res.status === 'fulfilled' ? res.value.data?.data || res.value.data : []);
+      const unwrap = <T,>(res: PromiseSettledResult<any>): T[] => {
+        return (res.status === 'fulfilled' ? res.value.data?.data || res.value.data : []) as T[];
+      };
 
-      setClasses(unwrap(classRes));
-      setStreams(unwrap(streamRes));
-      setSubjects(unwrap(subjectRes));
+      setClasses(unwrap<Class>(classRes));
+      setStreams(unwrap<Stream>(streamRes));
+      setSubjects(unwrap<Subject>(subjectRes));
       
-      const yearsData = unwrap(yearRes);
+      const yearsData = unwrap<AcademicYear>(yearRes);
       setAcademicYears(yearsData);
       
       // Set default selected year for terms view
       if (yearsData.length > 0 && !selectedYearForTerms) {
-        const currentYear = yearsData.find((y: any) => y.is_current);
+        const currentYear = yearsData.find((y: AcademicYear) => y.is_current);
         setSelectedYearForTerms(currentYear?.id || yearsData[0].id);
       }
       
-      setGradingSystem(unwrap(gradeRes));
+      const gradingData = unwrap<GradingSystem>(gradeRes);
+      setGradingSystem(gradingData[0] || null);
 
     } catch (err) {
       console.error("Setup Load Error:", err);
@@ -85,12 +194,22 @@ const AcademicSetup: React.FC = () => {
       const isEdit = !!editingId;
 
       if (showModal === 'Class') {
-        const payload = { className: formData.className, classLevel: parseInt(formData.classLevel) };
-        isEdit ? await api.put(`/classes/${editingId}`, payload) : await api.post('/classes', payload);
+        const payload = { 
+          className: formData.className, 
+          classLevel: parseInt(formData.classLevel) 
+        };
+        isEdit 
+          ? await api.put(`/classes/${editingId}`, payload) 
+          : await api.post('/classes', payload);
       } 
       else if (showModal === 'Stream') {
-        const payload = { name: formData.streamName, classId: formData.classId };
-        isEdit ? await api.put(`/streams/${editingId}`, payload) : await api.post('/streams', payload);
+        const payload = { 
+          name: formData.streamName, 
+          classId: formData.classId 
+        };
+        isEdit 
+          ? await api.put(`/streams/${editingId}`, payload) 
+          : await api.post('/streams', payload);
       }
       else if (showModal === 'Subject') {
         const payload = { 
@@ -136,9 +255,17 @@ const AcademicSetup: React.FC = () => {
         }
       }
       else if (showModal === 'Grade') {
-        const payload = { minScore: parseInt(formData.minScore), maxScore: parseInt(formData.maxScore), points: parseInt(formData.points), grade: formData.grade };
+        const payload = { 
+          minScore: parseInt(formData.minScore), 
+          maxScore: parseInt(formData.maxScore), 
+          points: parseInt(formData.points), 
+          grade: formData.grade 
+        };
         await api.put(`/grading/scale/${editingId}`, payload);
-        await api.patch('/grading/scales/remarks', { scaleId: editingId, description: formData.comment });
+        await api.patch('/grading/scales/remarks', { 
+          scaleId: editingId, 
+          description: formData.comment 
+        });
       }
 
       await fetchAcademicData();
@@ -226,13 +353,28 @@ const AcademicSetup: React.FC = () => {
     setShowModal(null);
     setEditingId(null);
     setFormData({
-      className: "", classLevel: "",
-      streamName: "", classId: "",
-      name: "", code: "", category: "",
-      yearName: "", yearStart: "", yearEnd: "", isCurrentYear: false,
-      termName: "", academicYearId: "", termStart: "", termEnd: "",
-      feeDeadline: "", isCurrentTerm: false,
-      grade: "", minScore: "", maxScore: "", points: "", comment: ""
+      className: "",
+      classLevel: "",
+      streamName: "",
+      classId: "",
+      name: "",
+      code: "",
+      category: "",
+      yearName: "",
+      yearStart: "",
+      yearEnd: "",
+      isCurrentYear: false,
+      termName: "",
+      academicYearId: "",
+      termStart: "",
+      termEnd: "",
+      feeDeadline: "",
+      isCurrentTerm: false,
+      grade: "",
+      minScore: "",
+      maxScore: "",
+      points: "",
+      comment: ""
     });
   };
 
@@ -245,13 +387,13 @@ const AcademicSetup: React.FC = () => {
     });
   };
 
-  const getCurrentYear = () => {
+  const getCurrentYear = (): AcademicYear | undefined => {
     return academicYears.find(y => y.is_current);
   };
 
-  const getSelectedYearTerms = () => {
+  const getSelectedYearTerms = (): Term[] => {
     if (!selectedYearForTerms) return [];
-    const year = academicYears.find(y => y.id === selectedYearForTerms);
+    const year = academicYears.find((y: AcademicYear) => y.id === selectedYearForTerms);
     return year?.terms || [];
   };
 
@@ -286,7 +428,7 @@ const AcademicSetup: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
-            {classes.map(c => (
+            {classes.map((c: Class) => (
               <div key={c.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-indigo-200 hover:bg-slate-100/50">
                 <span className="font-bold text-slate-700">{c.class_name} <span className="text-slate-400 font-medium ml-2 text-xs">Level {c.class_level}</span></span>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -313,7 +455,7 @@ const AcademicSetup: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
-            {streams.map(s => (
+            {streams.map((s: Stream) => (
               <div key={s.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-emerald-200 hover:bg-slate-100/50">
                 <div>
                     <p className="font-bold text-slate-700 leading-none">{s.name}</p>
@@ -343,7 +485,7 @@ const AcademicSetup: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
-            {subjects.map(sub => (
+            {subjects.map((sub: Subject) => (
               <div key={sub.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-amber-200 hover:bg-slate-100/50">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-xs font-black text-amber-600 border border-amber-100">
@@ -380,7 +522,7 @@ const AcademicSetup: React.FC = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
-            {academicYears.map(year => (
+            {academicYears.map((year: AcademicYear) => (
               <div key={year.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-violet-200 hover:bg-slate-100/50">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -428,7 +570,7 @@ const AcademicSetup: React.FC = () => {
                 onChange={(e) => setSelectedYearForTerms(e.target.value)}
                 className="text-xs font-bold bg-slate-50 border-none rounded-xl px-3 py-1.5 outline-none"
               >
-                {academicYears.map(year => (
+                {academicYears.map((year: AcademicYear) => (
                   <option key={year.id} value={year.id}>
                     {year.year_name} {year.is_current ? "(Current)" : ""}
                   </option>
@@ -450,7 +592,7 @@ const AcademicSetup: React.FC = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2">
-            {getSelectedYearTerms().map(term => (
+            {getSelectedYearTerms().map((term: Term) => (
               <div key={term.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all hover:border-rose-200 hover:bg-slate-100/50">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -510,7 +652,7 @@ const AcademicSetup: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {gradingSystem?.grades?.map((g: any) => (
+                {gradingSystem?.grades?.map((g: Grade) => (
                   <tr key={g.id} className="group hover:bg-slate-50/50 transition-colors">
                     <td className="py-4 px-4 font-black text-indigo-600">{g.grade}</td>
                     <td className="py-4 px-4 font-bold text-slate-600">{g.min_score} - {g.max_score}</td>
@@ -575,7 +717,7 @@ const AcademicSetup: React.FC = () => {
                     onChange={e => setFormData({...formData, classId: e.target.value})}
                   >
                     <option value="">Select Parent Class</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
+                    {classes.map((c: Class) => <option key={c.id} value={c.id}>{c.class_name}</option>)}
                   </select>
                   <input 
                     placeholder="Stream Name (e.g., North)" 
@@ -669,7 +811,7 @@ const AcademicSetup: React.FC = () => {
                       required
                     >
                       <option value="">Select Academic Year</option>
-                      {academicYears.map(year => (
+                      {academicYears.map((year: AcademicYear) => (
                         <option key={year.id} value={year.id}>
                           {year.year_name} {year.is_current ? "(Current)" : ""}
                         </option>

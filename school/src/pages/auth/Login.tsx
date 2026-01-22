@@ -172,142 +172,128 @@ const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
     return Object.keys(newErrors).length === 0;
   };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setErrors({});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
+  if (!validateForm()) {
+    return;
+  }
 
-    if (!validateForm()) {
-      return;
+  setIsSubmitting(true);
+
+  try {
+    const success = await login(
+      email.trim(),
+      password,
+      schoolSlug.trim().toLowerCase()
+    );
+
+    if (success) {
+      // Login was successful, no need to checkAuth
+      // The navigation will happen automatically via useEffect or redirectBasedOnRole
+      console.log("Login successful, should redirect");
+    } else {
+      // If login returns false but doesn't throw, show generic error
+      setErrors({
+        general: 'Login failed. Please check your credentials.'
+      });
     }
-
-    setIsSubmitting(true);
-
-    try {
-      const success = await login(
-        email.trim(),
-        password,
-        schoolSlug.trim().toLowerCase()
-      );
-
-      if (!success) {
-     
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-          setErrors({
-            general: 'Login failed. No access token received.'
-          });
-        } else {
-          // Token exists, try to check auth
-          try {
-            const isAuthenticated = await checkAuth();
-            if (!isAuthenticated) {
-              setErrors({
-                general: 'Login failed. Please check your credentials.'
-              });
-            }
-          } catch (authError) {
+  } catch (error: any) {
+    console.error('Login error:', error);
+    
+    // Handle different types of errors
+    if (error?.response) {
+      // Axios response error
+      const { status, data } = error.response;
+      
+      switch (status) {
+        case 400:
+          if (data.error?.includes('Email, password, and school slug')) {
             setErrors({
-              general: 'Session validation failed. Please try again.'
+              general: 'Please fill in all required fields.'
+            });
+          } else if (data.error?.includes('Invalid email format')) {
+            setErrors({
+              email: 'Invalid email format'
+            });
+          } else {
+            setErrors({
+              general: data.error || 'Invalid request. Please check your input.'
             });
           }
-        }
-      }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      
-      // Handle different types of errors
-      if (error?.response) {
-        // Axios response error
-        const { status, data } = error.response;
-        
-        switch (status) {
-          case 400:
-            if (data.error?.includes('Email, password, and school slug')) {
-              setErrors({
-                general: 'Please fill in all required fields.'
-              });
-            } else if (data.error?.includes('Invalid email format')) {
-              setErrors({
-                email: 'Invalid email format'
-              });
-            } else {
-              setErrors({
-                general: data.error || 'Invalid request. Please check your input.'
-              });
-            }
-            break;
-            
-          case 401:
-            if (data.error === 'Invalid credentials') {
-              setErrors({
-                general: 'Invalid email or password.'
-              });
-            } else if (data.error === 'User not associated with this school') {
-              setErrors({
-                general: 'This email is not registered with this school.'
-              });
-            } else {
-              setErrors({
-                general: 'Authentication failed. Please check your credentials.'
-              });
-            }
-            break;
-            
-          case 403:
-            if (data.error?.includes('Please verify your email address')) {
-              setErrors({
-                general: 'Please verify your email address before logging in.'
-              });
-            } else {
-              setErrors({
-                general: 'Access denied. Please contact your administrator.'
-              });
-            }
-            break;
-            
-          case 404:
-            if (data.error === 'School not found or inactive') {
-              setErrors({
-                schoolSlug: 'School not found or inactive.'
-              });
-            } else {
-              setErrors({
-                general: data.error || 'Resource not found.'
-              });
-            }
-            break;
-            
-          case 500:
+          break;
+          
+        case 401:
+          if (data.error === 'Invalid credentials') {
             setErrors({
-              general: 'Server error. Please try again later.'
+              general: 'Invalid email or password.'
             });
-            break;
-            
-          default:
+          } else if (data.error === 'User not associated with this school') {
             setErrors({
-              general: data?.error || `Login failed (${status}). Please try again.`
+              general: 'This email is not registered with this school.'
             });
-        }
-      } else if (error?.request) {
-        // Network error (no response received)
-        setErrors({
-          general: 'Network error. Please check your internet connection.'
-        });
-      } else if (error?.message) {
-        // Other errors
-        setErrors({
-          general: error.message || 'An unexpected error occurred.'
-        });
-      } else {
-        setErrors({
-          general: 'Login failed. Please try again.'
-        });
+          } else {
+            setErrors({
+              general: 'Authentication failed. Please check your credentials.'
+            });
+          }
+          break;
+          
+        case 403:
+          if (data.error?.includes('Please verify your email address')) {
+            setErrors({
+              general: 'Please verify your email address before logging in.'
+            });
+          } else {
+            setErrors({
+              general: 'Access denied. Please contact your administrator.'
+            });
+          }
+          break;
+          
+        case 404:
+          if (data.error === 'School not found or inactive') {
+            setErrors({
+              schoolSlug: 'School not found or inactive.'
+            });
+          } else {
+            setErrors({
+              general: data.error || 'Resource not found.'
+            });
+          }
+          break;
+          
+        case 500:
+          setErrors({
+            general: 'Server error. Please try again later.'
+          });
+          break;
+          
+        default:
+          setErrors({
+            general: data?.error || `Login failed (${status}). Please try again.`
+          });
       }
-    } finally {
-      setIsSubmitting(false);
+    } else if (error?.request) {
+      // Network error (no response received)
+      setErrors({
+        general: 'Network error. Please check your internet connection.'
+      });
+    } else if (error?.message) {
+      // Other errors
+      setErrors({
+        general: error.message || 'An unexpected error occurred.'
+      });
+    } else {
+      setErrors({
+        general: 'Login failed. Please try again.'
+      });
     }
-  };
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 const handleForgotPassword = async (e: React.FormEvent) => {
   e.preventDefault();
   setErrors({});

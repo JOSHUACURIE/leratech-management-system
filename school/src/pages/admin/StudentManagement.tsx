@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { UserPlus, Trash2, Search, Loader2, BookOpen, GraduationCap, MapPin, CheckCircle2, Calendar, Clock, ChevronDown } from "lucide-react";
+import { UserPlus, Trash2, Search, Loader2, BookOpen, GraduationCap, MapPin, CheckCircle2, ChevronDown, Home, Sun, AlertCircle } from "lucide-react";
 import Card from "../../components/common/Card";
 import api from "../../services/api";
 
@@ -24,8 +24,10 @@ const StudentManagement: React.FC = () => {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
   const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [admissionNumber, setAdmissionNumber] = useState("");
+  const [studentType, setStudentType] = useState<string>("day_scholar");
 
-  // 1. Initial Load: Fetch All Contextual Data
+  // Initial data fetch
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -40,20 +42,15 @@ const StudentManagement: React.FC = () => {
         setStudents(studentRes.data?.data || []);
         setClasses(classRes.data?.data || []);
         setSubjectsList(subjectRes.data?.data || []);
-        setAcademicYears(yearRes.data?.data || []);
         
-        // Set default academic year to current if available
-        const currentYear = yearRes.data?.data?.find((y: any) => y.is_current);
+        const yearsData = yearRes.data?.data || [];
+        setAcademicYears(Array.isArray(yearsData) ? yearsData : [yearsData]);
+        
+        const yearsArray = Array.isArray(yearsData) ? yearsData : [yearsData];
+        const currentYear = yearsArray.find((y: any) => y.is_current);
         if (currentYear) {
           setSelectedAcademicYear(currentYear.id);
-          // Set terms for this year
-          fetchTerms(currentYear.id);
-          
-          // Set default term to current if available
-          const currentTerm = currentYear.terms?.find((t: any) => t.is_current);
-          if (currentTerm) {
-            setSelectedTerm(currentTerm.id);
-          }
+          await fetchTerms(currentYear.id);
         }
 
       } catch (err) {
@@ -65,39 +62,109 @@ const StudentManagement: React.FC = () => {
     fetchInitialData();
   }, []);
 
-  // 2. Dependency Load: Fetch Streams when Class changes
+  // Fetch streams when class changes - IMPROVED VERSION
   useEffect(() => {
     if (!selectedClass) {
       setStreams([]);
       setSelectedStream("");
       return;
     }
+    
     const fetchStreams = async () => {
       try {
-        const res = await api.get(`/streams?classId=${selectedClass}`);
-        setStreams(res.data?.data || []);
-      } catch (err) {
-        console.error("Failed to load streams", err);
+        console.log(`Fetching streams for class ID: ${selectedClass}`);
+        
+        // Try multiple API parameter formats
+        let streamsData: any[] = [];
+        
+        try {
+          // First try with classId parameter
+          const res = await api.get(`/streams?classId=${selectedClass}`);
+          console.log("Streams API response:", res.data);
+          
+          if (res.data?.data) {
+            streamsData = Array.isArray(res.data.data) ? res.data.data : [res.data.data];
+          } else if (Array.isArray(res.data)) {
+            streamsData = res.data;
+          }
+        } catch (err1) {
+          console.log("First API call failed, trying with class_id parameter...", err1);
+          
+          try {
+            // Try with class_id parameter
+            const res = await api.get(`/streams?class_id=${selectedClass}`);
+            if (res.data?.data) {
+              streamsData = Array.isArray(res.data.data) ? res.data.data : [res.data.data];
+            } else if (Array.isArray(res.data)) {
+              streamsData = res.data;
+            }
+          } catch (err2) {
+            console.log("Second API call failed, trying to get all streams...", err2);
+            
+            try {
+              // Get all streams and filter client-side
+              const res = await api.get('/streams');
+              const allStreams = res.data?.data || res.data || [];
+              const allStreamsArray = Array.isArray(allStreams) ? allStreams : [allStreams];
+              
+              // Filter by class_id
+              streamsData = allStreamsArray.filter((stream: any) => 
+                stream.class_id === selectedClass || 
+                stream.class?.id === selectedClass
+              );
+            } catch (err3) {
+              console.error("All stream fetch attempts failed", err3);
+            }
+          }
+        }
+        
+        console.log(`Found ${streamsData.length} streams for class ${selectedClass}:`, streamsData);
+        setStreams(streamsData);
+        
+        // Clear selected stream when class changes
+        setSelectedStream("");
+        
+      } catch (err: any) {
+        console.error("Failed to load streams:", err.response?.data || err.message);
+        setStreams([]);
+        setSelectedStream("");
       }
     };
+    
     fetchStreams();
   }, [selectedClass]);
 
-  // 3. Fetch Terms when Academic Year changes
+  const generateAdmissionNumber = (): string => {
+    const timestamp = Date.now().toString().slice(-6);
+    const randomSuffix = Math.random().toString(36).substr(2, 3).toUpperCase();
+    return `ADM-${timestamp}-${randomSuffix}`;
+  };
+
   const fetchTerms = async (academicYearId: string) => {
     try {
       const res = await api.get(`/academic/years/${academicYearId}/terms`);
-      setTerms(res.data?.data || []);
-      // Auto-select first term if none selected
-      if (res.data?.data?.length > 0 && !selectedTerm) {
-        setSelectedTerm(res.data.data[0].id);
+      
+      let termsData = [];
+      if (res.data?.data?.terms) {
+        termsData = res.data.data.terms;
+      } else if (res.data?.data) {
+        termsData = Array.isArray(res.data.data) ? res.data.data : [res.data.data];
+      } else if (Array.isArray(res.data)) {
+        termsData = res.data;
+      }
+      
+      setTerms(termsData);
+      
+      if (termsData.length > 0 && !selectedTerm) {
+        const currentTerm = termsData.find((t: any) => t.is_current);
+        setSelectedTerm(currentTerm ? currentTerm.id : termsData[0].id);
       }
     } catch (err) {
       console.error("Failed to load terms", err);
+      setTerms([]);
     }
   };
 
-  // Handle academic year selection
   useEffect(() => {
     if (selectedAcademicYear) {
       fetchTerms(selectedAcademicYear);
@@ -117,27 +184,31 @@ const StudentManagement: React.FC = () => {
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(" ") || "Student";
 
-    // Generate admission number with timestamp and random suffix
-    const timestamp = Date.now().toString().slice(-6);
-    const randomSuffix = Math.random().toString(36).substr(2, 3).toUpperCase();
-    const admissionNumber = `ADM-${timestamp}-${randomSuffix}`;
+    let finalAdmissionNumber = admissionNumber.trim();
+    if (!finalAdmissionNumber) {
+      finalAdmissionNumber = generateAdmissionNumber();
+    }
 
     try {
       setSyncing(true);
       const payload = {
         firstName,
         lastName,
-        admissionNumber,
+        admissionNumber: finalAdmissionNumber,
         classId: selectedClass,
         streamId: selectedStream || null,
         subjectIds: selectedSubjects.length > 0 ? selectedSubjects : undefined,
         academicYearId: selectedAcademicYear,
         termId: selectedTerm,
-        dateOfBirth: null, // You might want to add a DOB field
-        gender: "OTHER",   // You might want to add a gender field
-        studentType: "day_scholar"
+        dateOfBirth: null,
+        gender: "OTHER",
+        studentType: studentType, // Using state variable
+        bloodGroup: null,
+        allergies: null,
+        medicalConditions: null
       };
 
+      console.log("Enrollment payload:", payload);
       const res = await api.post('/students', payload);
       
       // Refresh student list
@@ -146,9 +217,17 @@ const StudentManagement: React.FC = () => {
       
       // Reset Form
       setName("");
+      setAdmissionNumber("");
+      setSelectedClass("");
+      setSelectedStream("");
+      setSelectedAcademicYear("");
+      setSelectedTerm("");
+      setStudentType("day_scholar");
       setSelectedSubjects([]);
+      
       alert("Student enrolled successfully!");
     } catch (err: any) {
+      console.error("Enrollment error:", err.response?.data || err.message);
       alert(err.response?.data?.error || "Enrollment failed: " + err.message);
     } finally {
       setSyncing(false);
@@ -172,6 +251,7 @@ const StudentManagement: React.FC = () => {
   };
 
   const getSelectedTermName = () => {
+    if (!terms || !Array.isArray(terms)) return "No Term Selected";
     const term = terms.find(t => t.id === selectedTerm);
     return term?.term_name || "No Term Selected";
   };
@@ -194,13 +274,15 @@ const StudentManagement: React.FC = () => {
           <p className="text-slate-500 font-medium">Manage student enrollment and subject assignments.</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-           <span className="text-[10px] font-black text-indigo-600 uppercase bg-indigo-50 px-3 py-1 rounded-full">
-             {getSelectedYearName()} • {getSelectedTermName()}
-           </span>
-           <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 px-4">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{students.length} Total Enrolled</span>
-           </div>
+          <span className="text-[10px] font-black text-indigo-600 uppercase bg-indigo-50 px-3 py-1 rounded-full">
+            {getSelectedYearName()} • {getSelectedTermName()}
+          </span>
+          <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 px-4">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+              {students.length} Total Enrolled
+            </span>
+          </div>
         </div>
       </div>
 
@@ -216,6 +298,31 @@ const StudentManagement: React.FC = () => {
             </div>
 
             <div className="space-y-5">
+              {/* Admission Number */}
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
+                  Admission Number
+                  <span className="text-slate-300 ml-1">(Auto-generated if empty)</span>
+                </label>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. ADM-2024-001"
+                    value={admissionNumber}
+                    onChange={(e) => setAdmissionNumber(e.target.value)}
+                    className="flex-1 px-5 py-4 bg-slate-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAdmissionNumber(generateAdmissionNumber())}
+                    className="px-4 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-colors whitespace-nowrap"
+                  >
+                    Generate
+                  </button>
+                </div>
+              </div>
+
+              {/* Full Name */}
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Full Name *</label>
                 <input
@@ -228,6 +335,38 @@ const StudentManagement: React.FC = () => {
                 />
               </div>
 
+              {/* Student Type */}
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Student Type</label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setStudentType("day_scholar")}
+                    className={`flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold border transition-all ${
+                      studentType === "day_scholar"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm"
+                        : "bg-slate-50 text-slate-600 border-slate-100 hover:border-slate-200"
+                    }`}
+                  >
+                    <Sun size={16} className={studentType === "day_scholar" ? "text-emerald-600" : "text-slate-400"} />
+                    Day Scholar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentType("boarder")}
+                    className={`flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-bold border transition-all ${
+                      studentType === "boarder"
+                        ? "bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm"
+                        : "bg-slate-50 text-slate-600 border-slate-100 hover:border-slate-200"
+                    }`}
+                  >
+                    <Home size={16} className={studentType === "boarder" ? "text-indigo-600" : "text-slate-400"} />
+                    Boarder
+                  </button>
+                </div>
+              </div>
+
+              {/* Class and Stream */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Class *</label>
@@ -238,7 +377,11 @@ const StudentManagement: React.FC = () => {
                     required
                   >
                     <option value="">Select Class</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.class_name} {c.class_level ? `(Level ${c.class_level})` : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -246,12 +389,26 @@ const StudentManagement: React.FC = () => {
                   <select
                     value={selectedStream}
                     onChange={(e) => setSelectedStream(e.target.value)}
-                    disabled={!selectedClass}
+                    disabled={!selectedClass || streams.length === 0}
                     className="w-full mt-2 px-4 py-3.5 bg-slate-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
                   >
-                    <option value="">Select Stream</option>
-                    {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    <option value="">
+                      {!selectedClass ? "Select class first" : 
+                       streams.length === 0 ? "No streams available" : 
+                       "Select Stream"}
+                    </option>
+                    {streams.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
                   </select>
+                  {selectedClass && streams.length === 0 && (
+                    <div className="flex items-center gap-1 mt-2 text-xs text-amber-600">
+                      <AlertCircle size={12} />
+                      <span>No streams found for this class</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -282,11 +439,15 @@ const StudentManagement: React.FC = () => {
                     <select
                       value={selectedTerm}
                       onChange={(e) => setSelectedTerm(e.target.value)}
-                      disabled={!selectedAcademicYear}
+                      disabled={!selectedAcademicYear || terms.length === 0}
                       className="w-full pl-4 pr-10 py-3.5 bg-slate-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none disabled:opacity-50"
                       required
                     >
-                      <option value="">Select Term</option>
+                      <option value="">
+                        {!selectedAcademicYear ? "Select year first" : 
+                         terms.length === 0 ? "No terms available" : 
+                         "Select Term"}
+                      </option>
                       {terms.map(term => (
                         <option key={term.id} value={term.id}>
                           {term.term_name} {term.is_current ? "(Current)" : ""}
@@ -312,8 +473,8 @@ const StudentManagement: React.FC = () => {
                       onClick={() => toggleSubject(sub.id)}
                       className={`flex items-center gap-2 p-3 rounded-xl border text-left transition-all ${
                         selectedSubjects.includes(sub.id) 
-                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' 
-                        : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200'
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100' 
+                          : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200'
                       }`}
                     >
                       {selectedSubjects.includes(sub.id) ? (
@@ -353,22 +514,22 @@ const StudentManagement: React.FC = () => {
         <div className="xl:col-span-8">
           <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[2.5rem] bg-white overflow-hidden">
             <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-               <div>
-                 <h3 className="text-xl font-extrabold text-slate-800">Student Directory</h3>
-                 <p className="text-sm text-slate-500 font-medium mt-1">
-                   Showing {filteredStudents.length} of {students.length} students
-                 </p>
-               </div>
-               <div className="relative w-full md:w-72">
-                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input 
-                    type="text" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by name or admission..." 
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/10" 
-                  />
-               </div>
+              <div>
+                <h3 className="text-xl font-extrabold text-slate-800">Student Directory</h3>
+                <p className="text-sm text-slate-500 font-medium mt-1">
+                  Showing {filteredStudents.length} of {students.length} students
+                </p>
+              </div>
+              <div className="relative w-full md:w-72">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search by name or admission..." 
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/10" 
+                />
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -393,22 +554,36 @@ const StudentManagement: React.FC = () => {
                             <p className="font-black text-slate-700">
                               {s.firstName || s.first_name} {s.lastName || s.last_name}
                             </p>
-                            <p className="text-[10px] font-bold text-slate-400">
-                              {s.studentType === "boarder" ? "Boarder" : "Day Scholar"}
-                            </p>
+                            <div className="flex items-center gap-1 mt-1">
+                              {s.studentType === "boarder" || s.student_type === "boarder" ? (
+                                <>
+                                  <Home size={10} className="text-indigo-500" />
+                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                    Boarder
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Sun size={10} className="text-amber-500" />
+                                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                                    Day Scholar
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-8 py-6">
                         <div className="flex flex-col">
-                           <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600">
-                             <GraduationCap size={14} className="text-indigo-400"/> 
-                             {s.className || s.class?.class_name || "N/A"}
-                           </span>
-                           <span className="flex items-center gap-1.5 text-[10px] font-black text-slate-300 uppercase tracking-tighter mt-1">
-                             <MapPin size={10}/> 
-                             {s.streamName || s.stream?.name || "No Stream"}
-                           </span>
+                          <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                            <GraduationCap size={14} className="text-indigo-400"/> 
+                            {s.className || s.class?.class_name || "N/A"}
+                          </span>
+                          <span className="flex items-center gap-1.5 text-[10px] font-black text-slate-300 uppercase tracking-tighter mt-1">
+                            <MapPin size={10}/> 
+                            {s.streamName || s.stream?.name || "No Stream"}
+                          </span>
                         </div>
                       </td>
                       <td className="px-8 py-6">
@@ -425,12 +600,12 @@ const StudentManagement: React.FC = () => {
                         <button 
                           onClick={async () => {
                             if(window.confirm("Permanently delete this student record?")) {
-                               try {
-                                 await api.delete(`/students/${s.id}`);
-                                 setStudents(students.filter(st => st.id !== s.id));
-                               } catch (err: any) { 
-                                 alert("Delete failed: " + (err.response?.data?.error || err.message)); 
-                               }
+                              try {
+                                await api.delete(`/students/${s.id}`);
+                                setStudents(students.filter(st => st.id !== s.id));
+                              } catch (err: any) { 
+                                alert("Delete failed: " + (err.response?.data?.error || err.message)); 
+                              }
                             }
                           }}
                           className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
@@ -444,9 +619,9 @@ const StudentManagement: React.FC = () => {
               </table>
               {filteredStudents.length === 0 && (
                 <div className="p-20 text-center">
-                   <p className="text-slate-400 font-bold italic">
-                     {searchTerm ? "No students found matching your search." : "No students enrolled yet."}
-                   </p>
+                  <p className="text-slate-400 font-bold italic">
+                    {searchTerm ? "No students found matching your search." : "No students enrolled yet."}
+                  </p>
                 </div>
               )}
             </div>
