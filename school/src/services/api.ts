@@ -190,6 +190,91 @@ export const cbcAPI = {
   }) => api.post('/cbc/record', data),
 };
 
+// ==================== ATTENDANCE API ====================
+export interface AttendanceParams {
+  classId?: string;
+  streamId?: string;
+  subjectId?: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  termId?: string;
+  studentId?: string;
+}
+
+export interface AttendanceData {
+  classId: string;
+  streamId: string;
+  subjectId: string;
+  attendanceDate: string;
+  attendanceData: Array<{
+    studentId: string;
+    status: "present" | "absent" | "late" | "excused" | "sick";
+    reason?: string;
+  }>;
+}
+
+export interface AttendanceUpdateData {
+  status: "present" | "absent" | "late" | "excused" | "sick";
+  reason?: string;
+}
+
+export interface BulkAttendanceUpdateData {
+  updates: Array<{
+    attendanceId: string;
+    status: "present" | "absent" | "late" | "excused" | "sick";
+    reason?: string;
+  }>;
+}
+
+export const attendanceAPI = {
+  // Mark attendance
+  markAttendance: (data: AttendanceData) => 
+    api.post('/attendance/mark', data),
+
+  // Get attendance by date
+  getAttendanceByDate: (params: AttendanceParams) => 
+    api.get('/attendance/by-date', { params }),
+
+  // Update single attendance record
+  updateAttendance: (attendanceId: string, data: AttendanceUpdateData) => 
+    api.put(`/attendance/${attendanceId}`, data),
+
+  // Get student attendance
+  getStudentAttendance: (studentId: string, params?: Omit<AttendanceParams, 'studentId'>) => 
+    api.get(`/attendance/student/${studentId}`, { params }),
+
+  // Get class attendance
+  getClassAttendance: (classId: string, params?: Omit<AttendanceParams, 'classId'>) => 
+    api.get(`/attendance/class/${classId}`, { params }),
+
+  // Get stream attendance
+  getStreamAttendance: (streamId: string, params?: Omit<AttendanceParams, 'streamId'>) => 
+    api.get(`/attendance/stream/${streamId}`, { params }),
+
+  // Get attendance summary
+  getAttendanceSummary: (params: AttendanceParams) => 
+    api.get('/attendance/summary', { params }),
+
+  // Bulk update attendance
+  bulkUpdateAttendance: (data: BulkAttendanceUpdateData) => 
+    api.put('/attendance/bulk/update', data),
+
+  // Delete attendance record
+  deleteAttendance: (attendanceId: string) => 
+    api.delete(`/attendance/${attendanceId}`),
+
+  // Reports
+  getDailyReport: (params?: { date?: string }) => 
+    api.get('/attendance/reports/daily', { params }),
+
+  getMonthlyReport: (params?: { year?: string; month?: string; classId?: string }) => 
+    api.get('/attendance/reports/monthly', { params }),
+
+  getStudentAttendanceSummary: (studentId: string, params?: { month?: string; year?: string }) => 
+    api.get(`/attendance/student/${studentId}/summary`, { params }),
+};
+
 // ==================== TEACHER API ====================
 interface ScoreSubmissionData {
   studentId: string;
@@ -222,12 +307,48 @@ export const teacherAPI = {
 
   // Workload
   getMyWorkload: () => api.get('/teachers/me/workload'),
-
+  getMyLessonPlans: (params?: any) => 
+    api.get('/lesson-plans', { params }),
+    
+  getLessonPlanDetails: (planId: string) => 
+    api.get(`/lesson-plans/${planId}`),
+  
+  createLessonPlan: (data: any) => 
+    api.post('/lesson-plans', data),
+  
+  updateLessonPlan: (planId: string, data: any) => 
+    api.put(`/lesson-plans/${planId}`, data),
+  
+  deleteLessonPlan: (planId: string, data?: any) => 
+    api.delete(`/lesson-plans/${planId}`, { data }),
+  
+  getLessonPlanTemplates: (params?: any) => 
+    api.get('/lesson-plans/templates', { params }),
+  
+  createFromTemplate: (templateId: string, data: any) => 
+    api.post(`/lesson-plans/templates/${templateId}`, data),
+  
+  duplicateLessonPlan: (planId: string, data?: any) => 
+    api.post(`/lesson-plans/${planId}/duplicate`, data),
+  
+  exportLessonPlans: (params: any) => 
+    api.get('/lesson-plans/export', { 
+      params,
+      responseType: 'blob' // Important for file downloads
+    }),
   // Students
-  getClassStudents: (classId: string, streamId: string) => 
-    api.get(`/teachers/classes/${classId}/streams/${streamId}/students`),
+  getClassStudents: (classId: string, streamId?: string) => 
+    api.get(`/teachers/classes/${classId}/streams/${streamId}/students`, { params: { streamId } }),
 
   getClassRegistry: (classId: string) => api.get(`/classes/${classId}/registry`),
+
+  // Streams
+  getClassStreams: (classId: string) => 
+    api.get(`/classes/${classId}/streams`),
+
+  // Teacher subjects for a stream
+  getTeacherSubjects: (streamId: string) => 
+    api.get(`/teachers/me/streams/${streamId}/subjects`),
 
   // Score Management
   submitScore: (data: ScoreSubmissionData) => 
@@ -238,6 +359,13 @@ export const teacherAPI = {
 
   getAssessmentsForSubject: (subjectId: string) => 
     api.get(`/teachers/subjects/${subjectId}/assessments`),
+
+  // Attendance (Teacher-specific endpoints)
+  getAttendanceByDate: (params: AttendanceParams) => 
+    api.get('/attendance/by-date', { params }),
+
+  markAttendance: (data: AttendanceData) => 
+    api.post('/attendance/mark', data),
 
   // Pending & Activity
   getPendingSubmissions: () => api.get('/teachers/me/pending-submissions'),
@@ -271,6 +399,7 @@ export const teacherAPI = {
     classId?: string;
     streamId?: string;
   }>) => api.post('/cbc/submit-batch', { scores }),
+  
   getCbcStrandMasteryReport: (params: { subjectId: string; classId: string; termId: string }) => 
     api.get('/cbc/reports/strand-mastery', { params }),
 };
@@ -318,6 +447,13 @@ export const studentAPI = {
   getAll: (search = "") => api.get(`/students?search=${search}`),
   create: (data: any) => api.post('/students', data),
   delete: (id: string) => api.delete(`/students/${id}`),
+  
+  // Student attendance (for parents/students)
+  getStudentAttendance: (studentId: string, params?: AttendanceParams) => 
+    api.get(`/students/${studentId}/attendance`, { params }),
+  
+  getStudentAttendanceSummary: (studentId: string, params?: { month?: string; year?: string }) => 
+    api.get(`/students/${studentId}/attendance/summary`, { params }),
 };
 
 // ==================== COMMON TYPES ====================
@@ -343,6 +479,28 @@ export interface StudentsForScoreEntryResponse {
     existingScore: string | number;
     existingNotes: string;
   }>;
+}
+
+// Attendance Response Types
+export interface AttendanceResponse {
+  success: boolean;
+  message: string;
+  data: {
+    summary?: Record<string, number>;
+    total_students?: number;
+    marked_count?: number;
+    date?: string;
+    class?: string;
+    stream?: string;
+    subject?: string;
+    attendance?: Array<any>;
+    attendance_by_stream?: Record<string, any[]>;
+    statistics?: any;
+    report_date?: string;
+    daily_report?: any[];
+    report_by_date?: Record<string, any>;
+    monthly_totals?: Record<string, number>;
+  };
 }
 
 // CBC-specific types
@@ -375,7 +533,8 @@ export interface CBCStudent {
 export interface ClassOption {
   id: string;
   name: string;
-  level: number;
+  class_name: string;
+  class_level: number;
 }
 
 export interface StreamOption {
@@ -387,15 +546,65 @@ export interface StreamOption {
 export interface SubjectOption {
   id: string;
   name: string;
-  code: string;
+  subject_code: string;
+  code?: string; // For backward compatibility
 }
 
 export interface TermOption {
   id: string;
-  name: string;
+  term_name: string;
+  name?: string; // For backward compatibility
   is_current: boolean;
   start_date?: string;
   end_date?: string;
+}
+
+// Attendance-specific types
+export interface StudentAttendance {
+  id: string;
+  studentId: string;
+  admissionNumber: string;
+  fullName: string;
+  status: "present" | "absent" | "late" | "excused" | "sick";
+  reason?: string;
+  attendance_date: string;
+  subject?: {
+    name: string;
+    subject_code: string;
+  };
+  teacher?: {
+    teacher_code: string;
+    user: {
+      first_name: string;
+      last_name: string;
+    };
+  };
+}
+
+export interface AttendanceSummary {
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  sick: number;
+  unmarked: number;
+  total_students: number;
+  attendance_rate: number;
+}
+
+export interface DailyAttendanceReport {
+  class_id: string;
+  class_name: string;
+  total_records: number;
+  breakdown: Record<string, number>;
+}
+
+export interface MonthlyAttendanceReport {
+  month: number;
+  year: number;
+  report_by_date: Record<string, Record<string, number>>;
+  monthly_totals: Record<string, number>;
+  total_records: number;
 }
 
 export default api;

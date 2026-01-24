@@ -1,12 +1,9 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter } from 'react-router-dom';
-import App from './App';
-import { AuthProvider } from './context/AuthContext';
-import './index.css'
+
 // Create a client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,13 +16,15 @@ const queryClient = new QueryClient({
   },
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+interface AppProvidersProps {
+  children: React.ReactNode;
+}
+
+export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
+  return (
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
+        {children}
         <Toaster 
           position="top-right"
           toastOptions={{
@@ -53,5 +52,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </BrowserRouter>
-  </React.StrictMode>
-);
+  );
+};
