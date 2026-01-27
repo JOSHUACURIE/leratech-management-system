@@ -3,6 +3,7 @@ import Card from "../../../../../components/common/Card";
 import { PlusCircle, Copy, Loader2, Paperclip, Upload, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import FileUploader from "../common/FileUploader";
+import FileIcon from "../common/FileIcon";
 import { useFileHandler } from "../../hooks/useFileHandler";
 import { type AssignmentType, type SubjectOption, type StudentAssignment,type UploadedFile } from "../../types/assignment.types";
 import { ASSIGNMENT_TYPES, MAX_TOTAL_FILES } from "../../types/assignment.types";

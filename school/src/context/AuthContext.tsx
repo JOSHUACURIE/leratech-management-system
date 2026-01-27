@@ -278,7 +278,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error(responseData.error || "Authentication check failed");
     }
 
-    // CORRECTED: Access user and school from data
+
     const userData = responseData.data?.user;
     const schoolData = responseData.data?.school;
 

@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import AuthEntry from "./pages/auth/AuthEntry";
-import CreateUserForm from "./pages/admin/createUser";
+
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import Users from "./pages/admin/Users";
@@ -41,10 +41,24 @@ import TeacherCommunication from "./pages/parent/TeacherCommunication";
 
 // Bursar Pages
 import BursarDashboard from "./pages/bursar/Dashboard";
-
+import RecordPayments from "./pages/bursar/RecordPayments";
+import StudentBalances from "./pages/bursar/StudentBalances";
+import FeeStructures from "./pages/bursar/FeeStructures";
+import Invoices from "./pages/bursar/Invoices";
+import PaymentHistory from "./pages/bursar/PaymentHistory";
+import FeeArrears from "./pages/bursar/FeeArrears";
+import ScholarshipsAndDiscounts from "./pages/bursar/ScholarshipsAndDiscounts";
+import Refunds from "./pages/bursar/Refunds";
+import FinancialReports from "./pages/bursar/FinancialReports";
+import Reconciliation from "./pages/bursar/Reconciliation";
+import TreasuryLedger from "./pages/bursar/TreasuryLedger";
 // Protected Route
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import SchoolLayout from "./components/layout/SchoolLayout";
+
+
+
+
 
 function App() {
   return (
@@ -308,6 +322,7 @@ function App() {
               </DashboardLayout>
             </ProtectedRoute>
           } />
+          
           <Route path="setup" element={
             <ProtectedRoute allowedRoles={["bursar"]}>
               <DashboardLayout role="bursar">
@@ -315,10 +330,81 @@ function App() {
               </DashboardLayout>
             </ProtectedRoute>
           } />
+              
+          <Route path="reports" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+              <FinancialReports/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="invoices" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+               <Invoices/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+           <Route path="discounts" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+               <ScholarshipsAndDiscounts/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="fee-structure" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+               <FeeStructures/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="balances" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+                <StudentBalances/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+           <Route path="history" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+                <PaymentHistory/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+           <Route path="refunds" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+                <Refunds/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="reconciliation" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+                <Reconciliation/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+              <Route path="ledger" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+                <TreasuryLedger/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+               <Route path="arrears" element={
+            <ProtectedRoute allowedRoles={["bursar"]}>
+              <DashboardLayout role="bursar">
+                <FeeArrears/>
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
           <Route path="payments" element={
             <ProtectedRoute allowedRoles={["bursar"]}>
               <DashboardLayout role="bursar">
-                <div className="p-6">Record Payments</div>
+                <RecordPayments/>
               </DashboardLayout>
             </ProtectedRoute>
           } />
@@ -330,6 +416,8 @@ function App() {
             </ProtectedRoute>
           } />
         </Route>
+        
+        
 
         {/* Dashboard (dynamic based on role) */}
         <Route path="dashboard" element={

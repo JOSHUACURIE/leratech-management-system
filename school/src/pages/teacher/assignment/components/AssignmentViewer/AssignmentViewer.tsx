@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import Card from "../../../components/common/Card";
+import Card from "../../../../../components/common/Card";
 import { 
   ClipboardCheck, 
   DownloadCloud, 
@@ -25,11 +25,11 @@ import {
   ChevronLeft
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { assignmentAPI } from "../../../services/api";
+import { assignmentAPI } from "../../../../../services/api";
 import { 
-  AssignmentDetail, 
-  AssignmentSubmission, 
-  AssignmentType,
+  type AssignmentDetail, 
+  type AssignmentSubmission, 
+ type  AssignmentType,
   ASSIGNMENT_TYPES 
 } from "../../types/assignment.types";
 import SubmissionGrader from "./SubmissionGrader";
@@ -332,4 +332,295 @@ const AssignmentViewer: React.FC<AssignmentViewerProps> = ({
                   setSelectedDateRange({start: '', end: ''});
                 }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-bold hover:bg-red-100 transition-colors"
-              ></button>
+              >
+                <X size={14} /> Clear Filters
+              </button>
+            </div>
+          </Card>
+
+          {/* Statistics Card */}
+          <Card className="border-none shadow-lg rounded-[2rem] p-6 bg-gradient-to-br from-emerald-50 to-teal-50">
+            <h3 className="text-sm font-bold text-slate-700 mb-4">Statistics</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Total Assignments</span>
+                <span className="font-bold text-slate-800">{assignments.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Published</span>
+                <span className="font-bold text-emerald-600">
+                  {assignments.filter(a => a.is_published).length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600">Avg. Submissions</span>
+                <span className="font-bold text-blue-600">
+                  {assignments.length > 0 
+                    ? Math.round(assignments.reduce((acc, a) => acc + (a.submissions_count || 0), 0) / assignments.length)
+                    : 0
+                  }%
+                </span>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right Column - Assignments List/Detail */}
+        <div className="lg:col-span-3">
+          {viewMode === 'list' ? (
+            <Card className="border-none shadow-lg rounded-[2rem] p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-slate-800">All Assignments</h3>
+                <span className="text-sm text-slate-500">
+                  {filteredAssignments.length} assignments
+                </span>
+              </div>
+
+              {loadingAssignments ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 size={32} className="animate-spin text-emerald-600" />
+                </div>
+              ) : filteredAssignments.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileQuestion size={48} className="mx-auto text-slate-300 mb-4" />
+                  <p className="text-slate-600">No assignments found</p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {searchTerm || Object.values(activeFilters).some(f => f !== 'all') 
+                      ? "Try adjusting your filters"
+                      : "Create assignments to get started"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredAssignments.map(assignment => (
+                    <div
+                      key={assignment.id}
+                      className="p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors cursor-pointer group"
+                      onClick={() => handleSelectAssignment(assignment)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              assignment.submission_stats?.graded === assignment.total_students 
+                                ? 'bg-emerald-500' 
+                                : assignment.submission_stats?.graded > 0 
+                                  ? 'bg-amber-500' 
+                                  : 'bg-slate-300'
+                            }`} />
+                            <h4 className="font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                              {assignment.title}
+                            </h4>
+                            <span className="px-2 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">
+                              {assignment.assignment_type}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 text-sm text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <BookOpen size={12} /> {assignment.subject_name}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <CalendarDays size={12} /> Due: {new Date(assignment.due_date).toLocaleDateString()}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users2 size={12} /> {assignment.submissions_count || 0}/{assignment.total_students} submitted
+                            </span>
+                          </div>
+                          
+                          {assignment.description && (
+                            <p className="text-sm text-slate-600 mt-2 line-clamp-2">
+                              {assignment.description}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Eye size={16} className="text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                          <ChevronDown size={16} className="text-slate-400 group-hover:text-emerald-600 transition-colors rotate-90" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ) : (
+            /* Assignment Detail View */
+            <div className="space-y-6">
+              {/* Assignment Header */}
+              <Card className="border-none shadow-lg rounded-[2rem] p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className="flex items-center gap-2 text-slate-600 hover:text-slate-800"
+                  >
+                    <ChevronLeft size={16} /> Back to List
+                  </button>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={downloadAllSubmissions}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors"
+                    >
+                      <DownloadCloud size={14} /> Download All
+                    </button>
+                    <button
+                      onClick={exportGrades}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-sm font-bold hover:bg-emerald-100 transition-colors"
+                    >
+                      <FileBarChart size={14} /> Export Grades
+                    </button>
+                    <button
+                      onClick={sendReminder}
+                      className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 rounded-xl text-sm font-bold hover:bg-amber-100 transition-colors"
+                    >
+                      <AlertTriangle size={14} /> Send Reminder
+                    </button>
+                  </div>
+                </div>
+                
+                {selectedAssignment && (
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-2xl font-bold text-slate-800 mb-2">{selectedAssignment.title}</h3>
+                        <div className="flex items-center gap-4 text-slate-600">
+                          <span className="flex items-center gap-1">
+                            <BookOpen size={14} /> {selectedAssignment.subject_name}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <CalendarDays size={14} /> Due: {new Date(selectedAssignment.due_date).toLocaleDateString()}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <ClipboardCheck size={14} /> Max Score: {selectedAssignment.max_score}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="text-right">
+                        <div className="text-3xl font-bold text-emerald-600 mb-1">
+                          {selectedAssignment.submissions_count || 0}/{selectedAssignment.total_students}
+                        </div>
+                        <div className="text-sm text-slate-500">Submissions</div>
+                      </div>
+                    </div>
+                    
+                    {selectedAssignment.description && (
+                      <p className="text-slate-600 bg-slate-50 p-4 rounded-xl">
+                        {selectedAssignment.description}
+                      </p>
+                    )}
+                    
+                    {/* Progress Bars */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-white p-4 rounded-2xl">
+                        <div className="text-xs text-slate-500 mb-1">Submitted</div>
+                        <div className="text-2xl font-bold text-blue-600">{selectedAssignment.submissions_count || 0}</div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full mt-2 overflow-hidden">
+                          <div 
+                            className="bg-blue-500 h-full rounded-full"
+                            style={{ width: `${((selectedAssignment.submissions_count || 0) / selectedAssignment.total_students) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded-2xl">
+                        <div className="text-xs text-slate-500 mb-1">Graded</div>
+                        <div className="text-2xl font-bold text-emerald-600">{selectedAssignment.submission_stats?.graded || 0}</div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full mt-2 overflow-hidden">
+                          <div 
+                            className="bg-emerald-500 h-full rounded-full"
+                            style={{ width: `${((selectedAssignment.submission_stats?.graded || 0) / selectedAssignment.total_students) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded-2xl">
+                        <div className="text-xs text-slate-500 mb-1">Late</div>
+                        <div className="text-2xl font-bold text-amber-600">{selectedAssignment.submission_stats?.late || 0}</div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full mt-2 overflow-hidden">
+                          <div 
+                            className="bg-amber-500 h-full rounded-full"
+                            style={{ width: `${((selectedAssignment.submission_stats?.late || 0) / selectedAssignment.total_students) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded-2xl">
+                        <div className="text-xs text-slate-500 mb-1">Missing</div>
+                        <div className="text-2xl font-bold text-red-600">
+                          {selectedAssignment.total_students - (selectedAssignment.submissions_count || 0)}
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full mt-2 overflow-hidden">
+                          <div 
+                            className="bg-red-500 h-full rounded-full"
+                            style={{ width: `${((selectedAssignment.total_students - (selectedAssignment.submissions_count || 0)) / selectedAssignment.total_students) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+
+              {/* Submission Grader */}
+              {selectedAssignment && (
+                <SubmissionGrader
+                  assignment={selectedAssignment}
+                  submissions={submissions}
+                  loading={loadingSubmissions}
+                  onGradeUpdate={async (submissionId, grade, feedback) => {
+                    try {
+                      const response = await assignmentAPI.gradeSubmission(submissionId, {
+                        grade,
+                        feedback,
+                        graded_at: new Date().toISOString()
+                      });
+
+                      if (response.data?.success) {
+                        setSubmissions(prev => prev.map(sub => 
+                          sub.id === submissionId 
+                            ? { ...sub, grade, feedback, status: 'graded' }
+                            : sub
+                        ));
+                        toast.success("Submission graded successfully");
+                      }
+                    } catch (error) {
+                      console.error("Error grading submission:", error);
+                      toast.error("Failed to grade submission");
+                    }
+                  }}
+                  onBulkGrade={async (grade, feedback, studentIds) => {
+                    try {
+                      const promises = studentIds.map(studentId => {
+                        const submission = submissions.find(s => s.student_id === studentId);
+                        if (submission) {
+                          return assignmentAPI.gradeSubmission(submission.id, {
+                            grade,
+                            feedback,
+                            graded_at: new Date().toISOString()
+                          });
+                        }
+                        return Promise.resolve();
+                      });
+
+                      await Promise.all(promises);
+                      toast.success(`Graded ${studentIds.length} submissions`);
+                      await fetchSubmissions(selectedAssignment.id);
+                    } catch (error) {
+                      console.error("Error bulk grading:", error);
+                      toast.error("Failed to grade submissions");
+                    }
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AssignmentViewer;

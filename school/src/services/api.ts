@@ -112,6 +112,345 @@ export const subjectAPI = {
   delete: (id: string) => api.delete(`/subjects/${id}`)
 };
 
+// ==================== ASSIGNMENT API ====================
+export interface Assignment {
+  id: string;
+  title: string;
+  description?: string;
+  instructions?: string;
+  subject_id: string;
+  class_id: string;
+  stream_id?: string;
+  term_id: string;
+  academic_year_id: string;
+  assignment_type: string;
+  format: string;
+  publish_date: string;
+  due_date: string;
+  allow_late_submission: boolean;
+  late_submission_deadline?: string;
+  is_timed: boolean;
+  time_limit_minutes?: number;
+  auto_submit: boolean;
+  max_score: number;
+  pass_score?: number;
+  weight: number;
+  grading_rubric?: any;
+  show_rubric_to_students: boolean;
+  group_size?: number;
+  allow_student_group_creation: boolean;
+  allow_resources: boolean;
+  max_file_size_mb: number;
+  allowed_file_types: string;
+  is_published: boolean;
+  is_draft: boolean;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  subject?: {
+    id: string;
+    name: string;
+    subject_code: string;
+  };
+  class?: {
+    id: string;
+    class_name: string;
+  };
+  stream?: {
+    id: string;
+    name: string;
+  };
+  term?: {
+    id: string;
+    term_name: string;
+  };
+  teacher?: {
+    id: string;
+    user: {
+      first_name: string;
+      last_name: string;
+    };
+  };
+  submissions?: AssignmentSubmission[];
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignment_id: string;
+  student_id: string;
+  group_id?: string;
+  submitted_by_id: string;
+  submission_type: string;
+  submission_text?: string;
+  word_count: number;
+  started_at?: string;
+  submitted_at: string;
+  time_taken_minutes?: number;
+  status: string;
+  is_late: boolean;
+  late_minutes?: number;
+  score?: number;
+  percentage?: number;
+  grade?: string;
+  feedback?: string;
+  rubric_scores?: any;
+  graded_by?: string;
+  graded_at?: string;
+  ip_address?: string;
+  user_agent?: string;
+  attachments?: AssignmentAttachment[];
+  answers?: AssessmentAnswer[];
+  student?: {
+    id: string;
+    admission_number: string;
+    first_name: string;
+    last_name: string;
+  };
+  group?: {
+    id: string;
+    group_name: string;
+  };
+}
+
+export interface AssignmentAttachment {
+  id: string;
+  submission_id: string;
+  attachment_type: string;
+  file_url: string;
+  file_name: string;
+  display_order: number;
+  file_size: number;
+}
+
+export interface AssessmentQuestion {
+  id: string;
+  assignment_id: string;
+  question_type: string;
+  question_text: string;
+  question_order: number;
+  points: number;
+  is_required: boolean;
+  options?: any;
+  correct_answer?: any;
+  multiple_correct: boolean;
+  correct_answers?: any[];
+  matching_pairs?: any;
+  word_limit?: number;
+  expected_keywords?: string[];
+  explanation?: string;
+  allow_attachments: boolean;
+}
+
+export interface AssessmentAnswer {
+  id: string;
+  submission_id: string;
+  question_id: string;
+  student_answer?: string;
+  selected_options?: any[];
+  matching_answers?: any;
+  attachment_url?: string;
+  attachment_name?: string;
+  time_spent_seconds?: number;
+  question?: AssessmentQuestion;
+}
+
+export interface AssignmentStatistics {
+  total_students: number;
+  total_submitted: number;
+  total_graded: number;
+  submission_rate: number;
+  grading_completion: number;
+  average_score: number;
+  late_submissions: number;
+  late_percentage: number;
+  submissions_by_status: {
+    draft: number;
+    submitted: number;
+    late: number;
+    graded: number;
+    returned: number;
+  };
+}
+
+export interface SchoolAssignmentStatistics {
+  total_assignments: number;
+  published_assignments: number;
+  graded_assignments: number;
+  publication_rate: number;
+  grading_rate: number;
+  average_submissions_per_assignment: number;
+  assignments_by_type: Record<string, number>;
+  submissions_by_status: Record<string, number>;
+  top_teachers: Array<{
+    teacher_id: string;
+    teacher_name: string;
+    assignments_count: number;
+  }>;
+}
+
+export const assignmentAPI = {
+  // ========== TEACHER ENDPOINTS ==========
+  createAssignment: (data: {
+    title: string;
+    description?: string;
+    instructions?: string;
+    subject_id: string;
+    class_id: string;
+    stream_id?: string;
+    term_id: string;
+    academic_year_id: string;
+    assignment_type?: string;
+    format?: string;
+    publish_date?: string;
+    due_date: string;
+    allow_late_submission?: boolean;
+    late_submission_deadline?: string;
+    is_timed?: boolean;
+    time_limit_minutes?: number;
+    auto_submit?: boolean;
+    max_score?: number;
+    pass_score?: number;
+    weight?: number;
+    grading_rubric?: any;
+    show_rubric_to_students?: boolean;
+    group_size?: number;
+    allow_student_group_creation?: boolean;
+    allow_resources?: boolean;
+    max_file_size_mb?: number;
+    allowed_file_types?: string;
+    student_ids?: string[];
+  }) => api.post('/assignments/teacher', data),
+
+  getTeacherAssignments: (params?: {
+    status?: string;
+    assignment_type?: string;
+    term_id?: string;
+    subject_id?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/assignments/teacher', { params }),
+
+  updateAssignment: (assignmentId: string, data: any) =>
+    api.put(`/assignments/teacher/${assignmentId}`, data),
+
+  publishAssignment: (assignmentId: string) =>
+    api.post(`/assignments/teacher/${assignmentId}/publish`),
+
+  getAssignmentSubmissions: (assignmentId: string, params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get(`/assignments/teacher/${assignmentId}/submissions`, { params }),
+
+  gradeSubmission: (submissionId: string, data: {
+    score: number;
+    feedback?: string;
+    rubric_scores?: any;
+  }) => api.post(`/assignments/teacher/${submissionId}/grade`, data),
+
+  addAssessmentQuestions: (assignmentId: string, data: {
+    questions: Array<{
+      question_type: string;
+      question_text: string;
+      question_order?: number;
+      points?: number;
+      is_required?: boolean;
+      options?: any;
+      correct_answer?: any;
+      multiple_correct?: boolean;
+      correct_answers?: any[];
+      matching_pairs?: any;
+      word_limit?: number;
+      expected_keywords?: string[];
+      explanation?: string;
+      allow_attachments?: boolean;
+    }>;
+  }) => api.post(`/assignments/teacher/${assignmentId}/questions`, data),
+
+  getAssignmentStatistics: (assignmentId: string) =>
+    api.get(`/assignments/teacher/${assignmentId}/statistics`),
+
+  // ========== STUDENT ENDPOINTS ==========
+  getStudentAssignments: (params?: {
+    status?: string;
+    assignment_type?: string;
+    term_id?: string;
+    subject_id?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/assignments/student', { params }),
+
+  getAssignmentDetails: (assignmentId: string) =>
+    api.get(`/assignments/student/${assignmentId}`),
+
+  getStudentSubmission: (assignmentId: string) =>
+    api.get(`/assignments/student/${assignmentId}/submission`),
+
+  submitAssignment: (assignmentId: string, data: {
+    submission_text?: string;
+    attachment_urls?: string[];
+    group_id?: string;
+    answers?: Array<{
+      question_id: string;
+      student_answer?: string;
+      selected_options?: any[];
+      matching_answers?: any;
+      attachment_url?: string;
+      attachment_name?: string;
+      time_spent_seconds?: number;
+    }>;
+  }) => api.post(`/assignments/student/${assignmentId}/submit`, data),
+
+  startTimedAssessment: (assignmentId: string) =>
+    api.post(`/assignments/student/${assignmentId}/start`),
+
+  joinAssignmentGroup: (assignmentId: string, data: {
+    group_code: string;
+  }) => api.post(`/assignments/student/${assignmentId}/join-group`, data),
+
+  // ========== PARENT ENDPOINTS ==========
+  getParentChildren: () =>
+    api.get('/assignments/parent/children'),
+
+  getChildAssignments: (childId: string, params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get(`/assignments/parent/${childId}/assignments`, { params }),
+
+  getChildAssignmentDetails: (childId: string, assignmentId: string) =>
+    api.get(`/assignments/parent/${childId}/assignments/${assignmentId}`),
+
+  // ========== ADMIN ENDPOINTS ==========
+  getAllAssignments: (params?: {
+    status?: string;
+    assignment_type?: string;
+    term_id?: string;
+    subject_id?: string;
+    class_id?: string;
+    teacher_id?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/assignments/admin', { params }),
+
+  getSchoolAssignmentStatistics: (params?: {
+    term_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }) => api.get('/assignments/admin/statistics/school', { params }),
+
+  getClassAssignmentStatistics: (params: {
+    class_id: string;
+    term_id?: string;
+  }) => api.get('/assignments/admin/statistics/class', { params }),
+
+  deleteAssignment: (assignmentId: string) =>
+    api.delete(`/assignments/admin/${assignmentId}`),
+
+  archiveAssignment: (assignmentId: string) =>
+    api.post(`/assignments/admin/${assignmentId}/archive`),
+};
+
 // ==================== CBC ASSESSMENT API ====================
 export const cbcAPI = {
   // Data fetching routes
@@ -293,8 +632,832 @@ interface StudentsForScoreEntryParams {
   termId?: string;
 }
 
+export interface FeeDashboardSummary {
+  summary: {
+    totalBalance: number;
+    totalStudents: number;
+    pendingStudents: number;
+    clearedStudents: number;
+    collectionRate: string;
+    recentCollections: number;
+    advancePayments: number;
+    outstandingInvoices: number;
+  };
+  academicYear: {
+    name: string;
+    currentTerm: string;
+  } | null;
+}
+
+export interface StudentLedgerItem {
+  id: string;
+  student: string;
+  admissionNumber: string;
+  class: string;
+  stream: string;
+  studentType: string;
+  totalOutstanding: number;
+  creditBalance: number;
+  netBalance: number;
+  lastPayment: {
+    date: string;
+    amount: number;
+  } | null;
+  status: 'pending' | 'cleared' | 'credit';
+  invoiceCount: number;
+}
+
+export interface StudentLedgerResponse {
+  ledger: StudentLedgerItem[];
+  summary: {
+    totalStudents: number;
+    totalOutstanding: number;
+    totalNetBalance: number;
+    totalCredit: number;
+    pendingCount: number;
+    clearedCount: number;
+    creditCount: number;
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface ClassWiseSummaryItem {
+  classId: string;
+  className: string;
+  classLevel: number;
+  studentCount: number;
+  pendingStudents: number;
+  clearedStudents: number;
+  totalOutstanding: number;
+  totalInvoiced: number;
+  collectionRate: string;
+  avgBalance: string;
+  status: 'good' | 'fair' | 'needs-attention';
+}
+
+export interface ClassWiseSummaryResponse {
+  classSummary: ClassWiseSummaryItem[];
+  overallSummary: {
+    totalClasses: number;
+    totalStudents: number;
+    totalOutstanding: number;
+    totalPendingStudents: number;
+    totalClearedStudents: number;
+    avgCollectionRate: string;
+  };
+}
+
+export interface RecentActivityItem {
+  id: string;
+  type: 'PAYMENT' | 'INVOICE' | 'WAIVER';
+  date: string;
+  studentName: string;
+  admissionNumber: string;
+  description: string;
+  amount: number;
+  reference: string;
+  metadata: {
+    invoiceNumber?: string;
+    transactionId?: string;
+    status?: string;
+    balance?: number;
+    reason?: string;
+    approvedBy?: string;
+  };
+}
+
+export interface RecentActivitiesResponse {
+  activities: RecentActivityItem[];
+  summary: {
+    totalPayments: number;
+    totalInvoices: number;
+    totalWaivers: number;
+    totalAmount: number;
+    period: string;
+  };
+}
+
+export interface TopDebtorItem {
+  id: string;
+  student: string;
+  admissionNumber: string;
+  class: string;
+  stream: string;
+  totalOutstanding: number;
+  creditBalance: number;
+  netBalance: number;
+  lastPaymentDate: string;
+  lastPaymentAmount: number;
+  daysSinceLastPayment: number | null;
+  invoiceCount: number;
+}
+
+export interface TopDebtorsResponse {
+  debtors: TopDebtorItem[];
+  summary: {
+    totalDebtors: number;
+    totalOutstanding: number;
+    averageDebt: number;
+    highestDebt: number;
+  };
+}
+
+export interface PaymentMethodSummaryItem {
+  method: string;
+  amount: number;
+  transactions: number;
+  percentage: string;
+  average: number;
+}
+
+export interface PaymentMethodsSummaryResponse {
+  paymentMethods: PaymentMethodSummaryItem[];
+  summary: {
+    totalAmount: number;
+    totalTransactions: number;
+    averageTransaction: number;
+  };
+  period: {
+    startDate?: string;
+    endDate?: string;
+    generatedAt: string;
+  };
+}
+
+export interface CollectionTrendItem {
+  period: string;
+  start: string;
+  end: string;
+  collected: number;
+  invoiced: number;
+  transactions: number;
+  collectionRate: string;
+  growth: number | string;
+}
+
+export interface CollectionTrendResponse {
+  trend: CollectionTrendItem[];
+  summary: {
+    totalCollected: number;
+    totalInvoiced: number;
+    totalTransactions: number;
+    averageCollectionRate: string;
+    peakCollection: number;
+    lowestCollection: number;
+  };
+  period: {
+    type: string;
+    months: number;
+    startDate: string;
+    endDate: string;
+  };
+}
+export interface FeeStructureItem {
+  name: string;
+  amount: number;
+  isCompulsory?: boolean;
+  canBePaidInInstallments?: boolean;
+}
+
+export interface FeeStructureCreateData {
+  structureName: string;
+  academicYearId: string;
+  classId?: string;
+  studentType?: string;
+  termId: string;
+  description?: string;
+  appliesToAllTerms?: boolean;
+}
+
+export interface FeeItemsAddData {
+  feeStructureId: string;
+  termId: string;
+  items: FeeStructureItem[];
+}
+
+export interface InvoiceGenerationData {
+  classId: string;
+  termId: string;
+  academicYearId: string;
+  dueDate: string;
+}
+
+export interface PaymentData {
+  invoiceId: string;
+  amount: number;
+  paymentMethod: string;
+  transactionId?: string;
+  paymentReference?: string;
+  payerName?: string;
+}
+
+export interface PaymentWithAdvanceData {
+  studentId: string;
+  invoiceId: string;
+  amount: number;
+  paymentMethod: string;
+  transactionId?: string;
+}
+
+export interface FeeWaiverData {
+  studentId: string;
+  invoiceId: string;
+  waiverType: string;
+  amount: number;
+  reason?: string;
+  termId?: string;
+  academicYearId?: string;
+}
+
+export interface ExpenseData {
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+  vendorName?: string;
+  paymentMethod: string;
+  invoiceNumber?: string;
+}
+
+export interface InstallmentPlanData {
+  invoiceId: string;
+  numberOfInstallments: number;
+  startDate: string;
+}
+
+export interface StaffSalaryData {
+  staffId: string;
+  basicSalary: number;
+  houseAllowance?: number;
+  transportAllowance?: number;
+  otherAllowances?: number;
+}
+
+export interface PayrollData {
+  month: number;
+  year: number;
+  paymentMethod: string;
+}
+
+export interface ReconciliationData {
+  paymentIds?: string[];
+  expenseIds?: string[];
+  statementDate: string;
+  bankBalance: number;
+}
+
+export interface BursaryAllocationItem {
+  studentId: string;
+  invoiceId: string;
+  amount: number;
+}
+
+export interface BursaryData {
+  sponsorName: string;
+  totalBursaryAmount: number;
+  chequeNumber?: string;
+  allocations: BursaryAllocationItem[];
+}
+
+export interface StudentBalanceMigrationItem {
+  studentId: string;
+  amount: number;
+  type: 'ARREARS' | 'CREDIT';
+}
+
+export interface BalanceMigrationData {
+  academicYearId: string;
+  termId: string;
+  balances: StudentBalanceMigrationItem[];
+}
+
+export interface ClassFeeAssignmentData {
+  classId: string;
+  streamId?: string;
+  feeStructureId: string;
+  academicYearId: string;
+  termId: string;
+  notes?: string;
+}
+
+export interface StudentStatement {
+  studentProfile: {
+    id: string;
+    name: string;
+    admission: string;
+    class: string;
+    type: string;
+    credit_balance: number;
+  };
+  summary: {
+    totalInvoiced: number;
+    totalPaid: number;
+    totalWaivers: number;
+    outstandingBalance: number;
+    collectionRate: string;
+  };
+  feeAssignments: any[];
+  ledger: Array<{
+    date: string;
+    description: string;
+    reference: string;
+    debit: number;
+    credit: number;
+    type: string;
+    balance: number;
+    term?: string;
+    academic_year?: string;
+    verified?: boolean;
+    approved_by?: string;
+  }>;
+  qrCode: string;
+  verificationUrl: string;
+}
+
+export interface ReceiptData {
+  receiptData: {
+    schoolName: string;
+    schoolAddress: string;
+    schoolEmail: string;
+    schoolPhone: string;
+    logoUrl: string;
+    receiptNo: string;
+    date: string;
+    time: string;
+    studentName: string;
+    admNo: string;
+    className: string;
+    paymentMode: string;
+    items: any[];
+    totalPaid: string;
+    amountInWords: string;
+    balance: string;
+    qrCode: string;
+    verifiedBy: string;
+    term: string;
+    academicYear: string;
+    generatedAt: string;
+  };
+  qrCode: string;
+  downloadUrl: string;
+}
+
+export interface ClearanceListItem {
+  id: string;
+  admissionNumber: string;
+  fullName: string;
+  class: string;
+  stream: string;
+  studentType: string;
+  netBalance: number;
+  creditBalance: number;
+  totalDebt: number;
+  lastPaymentDate: string;
+  lastPaymentAmount: number;
+  isClear: boolean;
+}
+
+export interface ClearanceListResponse {
+  clearanceList: ClearanceListItem[];
+  summary: {
+    totalStudents: number;
+    studentsWithDebt: number;
+    totalArrears: number;
+    averageDebt: number;
+    collectionUrgency: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export const financeAPI={
+
+  getDashboardSummary: () => 
+    api.get('/admin/finance/dashboard/summary'),
+
+
+  getStudentLedger: (params?: {
+    classId?: string;
+    streamId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    status?: 'all' | 'pending' | 'cleared';
+  }) => api.get('/admin/finance/dashboard/ledger', { params }),
+
+  getClassWiseSummary: () => 
+    api.get('/admin/dashboard/finance/class-summary'),
+
+
+  getRecentActivities: (params?: {
+    limit?: number;
+  }) => api.get('/admin/finance/dashboard/recent-activities', { params }),
+
+  getTopDebtors: (params?: {
+    limit?: number;
+  }) => api.get('/admin/finance/dashboard/top-debtors', { params }),
+
+ 
+  getPaymentMethodsSummary: (params?: {
+    startDate?: string;
+    endDate?: string;
+  }) => api.get('/admin/finance/dashboard/payment-methods', { params }),
+
+  getCollectionTrend: (params?: {
+    period?: 'daily' | 'weekly' | 'monthly';
+    months?: number;
+  }) => api.get('/admin/finance/collection-trend', { params }),
+
+  getStudentFeeDetails: (studentId: string) =>
+    api.get(`/admin/finance/students/${studentId}/fees`),
+
+  getInvoiceDetails: (invoiceId: string) =>
+    api.get(`/admin/finance/invoices/${invoiceId}`),
+
+  getPaymentDetails: (paymentId: string) =>
+    api.get(`/admin/finance/payments/${paymentId}`),
+
+
+  getFeeWaivers: (params?: {
+    studentId?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/admin/finance/waivers', { params }),
+
+
+  getFeeStructure: (params?: {
+    classId?: string;
+    academicYearId?: string;
+  }) => api.get('/admin/finance/fee-structure', { params }),
+
+
+  getReconciliationReport: (params?: {
+    startDate: string;
+    endDate: string;
+    paymentMethod?: string;
+  }) => api.get('/admin/finance/reconciliation', { params }),
+
+
+  exportFinanceReport: (params: {
+    reportType: 'ledger' | 'summary' | 'debtors' | 'trend';
+    format: 'excel' | 'pdf' | 'csv';
+    filters?: any;
+  }) => api.get('/admin/finance/export', { 
+    params,
+    responseType: 'blob'
+  }),
+    createFeeStructure: (data: FeeStructureCreateData) =>
+    api.post('/finance/fee-structure', data),
+      addFeeItems: (data: FeeItemsAddData) =>
+    api.post('/finance/fee-structure/items', data),
+        assignFeesToClass: (data: ClassFeeAssignmentData) =>
+    api.post('/finance/fee-structure/assign', data),
+generateClassInvoices: (data: InvoiceGenerationData) =>
+    api.post('/finance/invoices/generate-class', data),
+  voidClassInvoices: (data: {
+    classId: string;
+    termId: string;
+    academicYearId: string;
+  }) => api.post('/finance/invoices/void-class', data),
+    processPayment: (data: PaymentData) =>
+    api.post('/finance/payments/process', data),
+      processPaymentWithAdvance: (data: PaymentWithAdvanceData) =>
+    api.post('/finance/payments/with-advance', data),
+        createInstallmentPlan: (data: InstallmentPlanData) =>
+    api.post('/finance/payments/installments/plan', data),
+          applyFeeWaiver: (data: FeeWaiverData) =>
+    api.post('/finance/waivers/apply', data),
+            allocateBursary: (data: BursaryData) =>
+    api.post('/finance/bursary/allocate', data),
+              getSponsorshipReport: (params?: {
+    sponsorName?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/finance/bursary/report', { params }),
+    recordExpense: (data: ExpenseData) =>
+    api.post('/finance/expenses', data),
+      setStaffSalary: (data: StaffSalaryData) =>
+    api.post('/finance/payroll/config', data),
+       processPayroll: (data: PayrollData) =>
+    api.post('/finance/payroll/process', data),
+         getDebtorsReport: (params?: {
+    classId?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/finance/reports/debtors', { params }),
+    generateMonthlyReport: (params: {
+    month: number;
+    year: number;
+  }) => api.get('/finance/reports/monthly-summary', { params }),
+
+    getFinancialOverview: (params?: {
+    academicYearId?: string;
+    termId?: string;
+  }) => api.get('/finance/reports/financial-overview', { params }),
+    getFeeClearanceList: (params?: {
+    classId?: string;
+    streamId?: string;
+    minBalance?: number;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/finance/reports/clearance-list', { params }),
+    getUnreconciledItems: (params?: {
+    startDate?: string;
+    endDate?: string;
+  }) => api.get('/finance/reconciliation/pending', { params }),
+
+   reconcileTransactions: (data: ReconciliationData) =>
+    api.post('/finance/reconciliation/verify', data),
+
+     getStudentStatement: (studentId: string) =>
+    api.get(`/finance/statement/${studentId}`),
+
+       verifyStatementPublicly: (studentId: string) =>
+    api.get(`/finance/verify/statement/${studentId}`),
+
+       generateReceipt: (paymentId: string, format?: 'html') =>
+    api.get(`/finance/receipt/${paymentId}${format === 'html' ? '?format=html' : ''}`),
+
+        downloadReceiptPDF: (paymentId: string) =>
+    api.get(`/finance/receipt/${paymentId}/pdf`, { 
+      responseType: 'blob' 
+    }),
+      getStudentsForMigration: (params?: {
+    classId?: string;
+    streamId?: string;
+    status?: string;
+  }) => api.get('/finance/migration/students', { params }),
+    migrateStudentBalances: (data: BalanceMigrationData) =>
+    api.post('/finance/migration/balances', data),
+
+      updateStudentFeeAssignment: (assignmentId: string, data: {
+    feeStructureId?: string;
+    applicableStudentType?: string;
+    notes?: string;
+  }) => api.put(`/finance/assignments/${assignmentId}`, data),
+
+   getPaymentMethods: () =>
+    api.get('/finance/config/payment-methods'),
+
+   getExpenseCategories: () =>
+    api.get('/finance/config/expense-categories'),
+
+     getWaiverTypes: () =>
+    api.get('/finance/config/waiver-types'),
+
+       bulkProcessPayments: (payments: PaymentData[]) =>
+    api.post('/finance/payments/bulk', { payments }),
+
+        bulkApplyFeeWaivers: (waivers: FeeWaiverData[]) =>
+    api.post('/finance/waivers/bulk', { waivers }),
+          bulkGenerateReceipts: (paymentIds: string[]) =>
+    api.post('/finance/receipts/bulk', { paymentIds }),
+
+           exportFinancialReport: (params: {
+    reportType: 'ledger' | 'summary' | 'debtors' | 'trend' | 'clearance' | 'sponsorship';
+    format: 'excel' | 'pdf' | 'csv';
+    filters?: any;
+  }) => api.get('/finance/reports/export', { 
+    params,
+    responseType: 'blob'
+  }),
+
+
+  getClasses: (params?: {
+  search?: string;
+  includeInactive?: boolean;
+  page?: number;
+  limit?: number;
+  sortBy?: 'name' | 'level' | 'student_count';
+  sortOrder?: 'asc' | 'desc';
+}) => api.get('/finance/classes', { params }),
+
+getClassById: (classId: string) => 
+  api.get(`/finance/classes/${classId}`),
+
+getClassStudents: (classId: string, params?: {
+  includeInactive?: boolean;
+  feeStatus?: 'paid' | 'pending' | 'partial' | 'overdue';
+  page?: number;
+  limit?: number;
+}) => api.get(`/finance/classes/${classId}/students`, { params }),
+
+getClassFeeSummary: (classId: string, params?: {
+  termId?: string;
+  academicYearId?: string;
+}) => api.get(`/finance/classes/${classId}/fee-summary`, { params }),
+
+// Stream Management
+getStreams: (params?: {
+  classId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) => api.get('/finance/streams', { params }),
+
+getStreamById: (streamId: string) => 
+  api.get(`/finance/streams/${streamId}`),
+
+getStreamStudents: (streamId: string, params?: {
+  includeInactive?: boolean;
+  feeStatus?: 'paid' | 'pending' | 'partial' | 'overdue';
+  minBalance?: number;
+  maxBalance?: number;
+  page?: number;
+  limit?: number;
+}) => api.get(`/finance/streams/${streamId}/students`, { params }),
+
+getStreamFeeSummary: (streamId: string, params?: {
+  termId?: string;
+  academicYearId?: string;
+}) => api.get(`/finance/streams/${streamId}/fee-summary`, { params }),
+
+getClassStreams: (classId: string, params?: {
+  includeStudentCount?: boolean;
+  includeFeeSummary?: boolean;
+  includeTeachers?: boolean;
+}) => api.get(`/finance/classes/${classId}/streams`, { params }),
+
+// Combined Queries
+getStudentsByClassAndStream: (params?: {
+  classId?: string;
+  streamId?: string;
+  search?: string;
+  admissionNumber?: string;
+  feeStatus?: 'all' | 'cleared' | 'pending' | 'partial' | 'overdue';
+  page?: number;
+  limit?: number;
+}) => api.get('/finance/students/filter', { params }),
+
+// Student Fee Information
+getStudentFeeBalance: (studentId: string, params?: {
+  termId?: string;
+  academicYearId?: string;
+  includeHistory?: boolean;
+}) => api.get(`/finance/students/${studentId}/balance`, { params }),
+
+getStudentFeeTransactions: (studentId: string, params?: {
+  startDate?: string;
+  endDate?: string;
+  transactionType?: 'all' | 'payment' | 'invoice' | 'waiver' | 'adjustment';
+  page?: number;
+  limit?: number;
+}) => api.get(`/finance/students/${studentId}/transactions`, { params }),
+
+getStudentClassAndStream: (studentId: string) =>
+  api.get(`/finance/students/${studentId}/class-stream`),
+
+// Class-Stream Fee Operations
+generateClassStreamInvoices: (data: {
+  classId: string;
+  streamId?: string;
+  termId: string;
+  academicYearId: string;
+  feeStructureId?: string;
+  dueDate?: string;
+  notes?: string;
+}) => api.post('/finance/invoices/generate-class-stream', data),
+
+voidClassStreamInvoices: (data: {
+  classId: string;
+  streamId?: string;
+  termId: string;
+  academicYearId: string;
+  reason?: string;
+}) => api.post('/finance/invoices/void-class-stream', data),
+
+getClassStreamCollectionReport: (params: {
+  classId: string;
+  streamId?: string;
+  termId?: string;
+  startDate?: string;
+  endDate?: string;
+  paymentMethod?: string;
+}) => api.get('/finance/reports/class-stream-collection', { params }),
+
+// Bulk Operations
+bulkUpdateStudentFees: (data: {
+  classId?: string;
+  streamId?: string;
+  studentIds?: string[];
+  action: 'applyWaiver' | 'addCharge' | 'adjustBalance' | 'transferClass';
+  amount?: number;
+  reason?: string;
+  effectiveDate?: string;
+}) => api.post('/finance/students/bulk-update-fees', data),
+
+exportClassStreamReport: (params: {
+  classId: string;
+  streamId?: string;
+  reportType: 'fee-summary' | 'student-list' | 'collection-report' | 'debtors';
+  format: 'excel' | 'pdf' | 'csv';
+  termId?: string;
+}) => api.get('/finance/reports/export-class-stream', {
+  params,
+  responseType: 'blob'
+}),
+
+// Class-Stream Analytics
+getClassStreamAnalytics: (params?: {
+  classId?: string;
+  streamId?: string;
+  period?: 'daily' | 'weekly' | 'monthly' | 'termly';
+  startDate?: string;
+  endDate?: string;
+}) => api.get('/finance/analytics/class-stream', { params }),
+
+getFeeComplianceByStream: (params?: {
+  classId?: string;
+  streamId?: string;
+  termId?: string;
+  minCompliance?: number;
+  maxCompliance?: number;
+}) => api.get('/finance/analytics/fee-compliance', { params }),
+
+// Migration between Streams
+transferStudentsBetweenStreams: (data: {
+  sourceStreamId: string;
+  targetStreamId: string;
+  studentIds?: string[];
+  transferFeeBalances?: boolean;
+  effectiveDate?: string;
+}) => api.post('/finance/students/transfer-streams', data),
+
+// Mass Communication
+sendFeeReminders: (data: {
+  classId?: string;
+  streamId?: string;
+  studentIds?: string[];
+  reminderType: 'overdue' | 'upcoming' | 'partial';
+  channel: 'sms' | 'email' | 'both';
+  message?: string;
+}) => api.post('/finance/communications/send-reminders', data),
+
+
+applyFeeStructureToStudents: (data: {
+  feeStructureId: string;
+  classId?: string;
+  streamId?: string;
+  termId: string;
+  academicYearId: string;
+  applyTo?: 'all' | 'new_only' | 'existing_only';
+  generateInvoices?: boolean;
+  invoiceDueDate?: string;
+  installmentPlan?: {
+    number: number;
+    dueDates?: string[];
+  };
+  notes?: string;
+}) => api.post('/finance/fee-application/apply', data),
+
+bulkAssignFeeStructures: (data: {
+  assignments: Array<{
+    studentId: string;
+    feeStructureId: string;
+    termId: string;
+    academicYearId: string;
+  }>;
+  generateInvoices?: boolean;
+  notes?: string;
+}) => api.post('/finance/fee-application/bulk-assign', data),
+
+getStudentFeeAssignments: (studentId: string) =>
+  api.get(`/finance/fee-application/student/${studentId}/assignments`),
+
+updateFeeAssignment: (assignmentId: string, data: {
+  feeStructureId?: string;
+  applicableStudentType?: string;
+  notes?: string;
+  isActive?: boolean;
+}) => api.put(`/finance/fee-application/assignments/${assignmentId}`, data),
+
+generateInvoicesForAssignments: (data: {
+  assignmentIds: string[];
+  dueDate?: string;
+  installmentPlan?: {
+    number: number;
+    dueDates?: string[];
+  };
+  notes?: string;
+}) => api.post('/finance/fee-application/generate-invoices', data),
+}
+
+
 export const teacherAPI = {
-  // Assignments
+  // Assignments (Deprecated - use assignmentAPI instead)
   getMyAssignments: (params?: {
     academic_year_id?: string;
     term_id?: string;
@@ -410,7 +1573,7 @@ export const academicAPI = {
   getYears: () => api.get('/academic/years'),
   createYear: (data: { year_name: string; start_date: string; end_date: string; is_current: boolean }) => 
     api.post('/academic/years', data),
-  getActiveYear: () => api.get('/academic/years/active'),
+  getActiveYear: () => api.get('/academic/years'),
 
   // Academic Terms
   getTerms: (yearId: string) => api.get(`/academic/years/${yearId}/terms`),
@@ -581,6 +1744,7 @@ export interface StudentAttendance {
   };
 }
 
+
 export interface AttendanceSummary {
   present: number;
   absent: number;
@@ -605,6 +1769,19 @@ export interface MonthlyAttendanceReport {
   report_by_date: Record<string, Record<string, number>>;
   monthly_totals: Record<string, number>;
   total_records: number;
+}
+
+// Assignment-specific response types
+export interface AssignmentResponse {
+  success: boolean;
+  message?: string;
+  data: Assignment | Assignment[] | AssignmentSubmission | AssignmentSubmission[] | AssignmentStatistics | SchoolAssignmentStatistics | any;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 export default api;

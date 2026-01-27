@@ -13,7 +13,8 @@ import {
   ChevronDown
 } from "lucide-react";
 import { type AssignmentDetail, type AssignmentSubmission } from "../../types/assignment.types";
-import { getFileIcon, formatFileSize } from "../../utils/fileUtils";
+import {  formatFileSize } from "../../utils/fileUtils";
+import FileIcon from "../common/FileIcon";
 
 interface SubmissionGraderProps {
   assignment: AssignmentDetail;
@@ -195,7 +196,7 @@ const SubmissionGrader: React.FC<SubmissionGraderProps> = ({
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
                         >
-                          {getFileIcon(file.type)}
+                          <FileIcon fileType={file.type} size={16} className="text-slate-400" />
                           <span className="text-sm">{file.name}</span>
                           <Download size={12} className="text-slate-400" />
                         </a>

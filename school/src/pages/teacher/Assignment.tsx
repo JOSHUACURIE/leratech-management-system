@@ -1,63 +1,258 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Card from "../../components/common/Card";
 import { 
   BookOpen, 
-  Calendar as CalendarIcon, 
-  PlusCircle, 
-  Send, 
-  Users, 
-  Search, 
-  CheckCircle,
-  FileText,
-  Copy
+  Database,
+  RefreshCw,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { assignmentAPI } from "../../services/api";
 
-/* ---------------- TYPES ---------------- */
-type Student = {
-  id: number;
-  name: string;
-  assignment?: string;
-  dueDate?: string;
-};
+// Components
+import AcademicPeriodFilter from "./assignment/components/filters/AcademicPeriodFilter";
+import ClassFilter from "./assignment/components/filters/ClassFilter";
+import AssignmentCreator from "./assignment/components/AssignmentCreator/AssignmentCreator";
+import StudentTable from "./assignment/components/common/StudentTable";
+import CacheManager from "./assignment/components/common/CacheManager";
+import AssignmentViewer from "./assignment/components/AssignmentViewer/AssignmentViewer";
 
-const classes = ["Grade 1", "Grade 2", "Class 6"];
-const streams = ["East", "West"];
-
-const mockStudents: Student[] = [
-  { id: 1, name: "Jane Smith" },
-  { id: 2, name: "John Owino" },
-  { id: 3, name: "Mary Johnson" },
-  { id: 4, name: "Peter Brown" },
-];
+// Hooks
+import { useAssignmentData } from "./assignment/hooks/useAssignmentData";
+import { useCache } from "./assignment/hooks/useCache";
+// Types
+import { 
+  type ClassOption, 
+ type  StreamOption, 
+  type SubjectOption, 
+  type TermOption, 
+  type AcademicYear,
+  type StudentAssignment,
+  type AssignmentType,
+  type UploadedFile
+} from "./assignment/types/assignment.types";
 
 const Assignments: React.FC = () => {
-  const [selectedClass, setSelectedClass] = useState("");
-  const [selectedStream, setSelectedStream] = useState("");
-  const [students, setStudents] = useState<Student[]>(mockStudents);
+  // State management
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [selectedStream, setSelectedStream] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<'create' | 'view'>('create');
   
-  // Bulk Assign States
-  const [bulkTitle, setBulkTitle] = useState("");
-  const [bulkDate, setBulkDate] = useState("");
+  // Data states
+  const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [streams, setStreams] = useState<StreamOption[]>([]);
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [terms, setTerms] = useState<TermOption[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
+  const [students, setStudents] = useState<StudentAssignment[]>([]);
+  const [filteredStudents, setFilteredStudents] = useState<StudentAssignment[]>([]);
+  
+  // Bulk assignment states
+  const [bulkTitle, setBulkTitle] = useState<string>("");
+  const [bulkDescription, setBulkDescription] = useState<string>("");
+  const [bulkDate, setBulkDate] = useState<string>("");
+  const [bulkSubject, setBulkSubject] = useState<string>("");
+  const [bulkType, setBulkType] = useState<AssignmentType>("homework");
+  const [bulkMaxScore, setBulkMaxScore] = useState<number>(100);
+  const [bulkWeight, setBulkWeight] = useState<number>(10);
+  const [bulkFiles, setBulkFiles] = useState<UploadedFile[]>([]);
+  
+  // UI states
+  const [initError, setInitError] = useState<string | null>(null);
+  
+  // Hooks
+  const { getCacheStats, clearCache, refreshing, setRefreshing } = useCache();
+  const {
+    loading,
+    loadingYears,
+    loadingTerms,
+    fetchInitialData,
+    fetchStreams,
+    fetchSubjects,
+    fetchStudents,
+    refreshData
+  } = useAssignmentData({
+    selectedClass,
+    selectedStream,
+    setClasses,
+    setStreams,
+    setSubjects,
+    setStudents,
+    setTerms,
+    setAcademicYears,
+    setInitError,
+    setSelectedAcademicYear,
+    setSelectedTerm
+  });
 
-  const handleApplyBulk = () => {
-    setStudents(prev => prev.map(s => ({
-      ...s,
-      assignment: bulkTitle,
-      dueDate: bulkDate
-    })));
+  const handlePublishAssignments = async (saving: boolean, setSaving: (saving: boolean) => void) => {
+    if (!selectedClass || !selectedStream || !selectedTerm) {
+      toast.error("Please select class, stream, and term");
+      return;
+    }
+
+    const assignmentsToPublish = students.filter(s => 
+      s.assignment && s.dueDate && s.subjectId
+    );
+
+    if (assignmentsToPublish.length === 0) {
+      toast.error("No assignments to publish");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      // Get academic year from selected term
+      const selectedTermObj = terms.find(t => t?.id === selectedTerm);
+      const academicYearId = selectedTermObj?.academic_year_id || selectedAcademicYear;
+
+      if (!academicYearId) {
+        toast.error("Could not determine academic year");
+        return;
+      }
+
+      // Group assignments by common properties for batch creation
+      const groupedByAssignment = new Map<string, any>();
+      
+      assignmentsToPublish.forEach(studentAssignment => {
+        const key = `${studentAssignment.assignment}-${studentAssignment.dueDate}-${studentAssignment.subjectId}-${studentAssignment.assignmentType}`;
+        
+        if (!groupedByAssignment.has(key)) {
+          const selectedClassObj = classes.find(c => c?.id === selectedClass);
+          const selectedStreamObj = streams.find(s => s?.id === selectedStream);
+          const description = studentAssignment.description || `Assignment for ${selectedClassObj?.class_name || 'Class'} ${selectedStreamObj?.name || ''}`;
+          
+          groupedByAssignment.set(key, {
+            title: studentAssignment.assignment!,
+            description: description,
+            subject_id: studentAssignment.subjectId!,
+            class_id: selectedClass,
+            stream_id: selectedStream,
+            term_id: selectedTerm,
+            academic_year_id: academicYearId,
+            due_date: studentAssignment.dueDate!,
+            assignment_type: studentAssignment.assignmentType || 'homework',
+            format: 'mixed',
+            max_score: studentAssignment.maxScore || 100,
+            weight: studentAssignment.weight || 10,
+            allow_late_submission: true,
+            is_published: true,
+            attachment_urls: studentAssignment.files?.map(f => f.url).filter(Boolean) || [],
+            student_ids: [] as string[]
+          });
+        }
+        
+        groupedByAssignment.get(key).student_ids.push(studentAssignment.student.id);
+      });
+
+      // Create each assignment group
+      const promises = Array.from(groupedByAssignment.values()).map(data =>
+        assignmentAPI.createAssignment(data)
+      );
+
+      await Promise.all(promises);
+      
+      toast.success(`Successfully published ${promises.length} assignment(s) with attachments`);
+      
+      // Reset form after successful publish
+      setStudents(prev => prev.map(s => ({
+        ...s,
+        assignment: "",
+        description: "",
+        dueDate: "",
+        subjectId: "",
+        files: []
+      })));
+      
+      setBulkTitle("");
+      setBulkDescription("");
+      setBulkDate("");
+      setBulkSubject("");
+      setBulkFiles([]);
+
+    } catch (error: any) {
+      console.error("Error publishing assignments:", error);
+      toast.error(error.message || "Failed to publish assignments");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleAssignmentChange = (id: number, value: string) => {
-    setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, assignment: value } : s)));
-  };
+  // Filter students based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredStudents(students);
+    } else {
+      const filtered = students.filter(student => 
+        student.student.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.student.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.student.admission_number.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredStudents(filtered);
+    }
+  }, [searchQuery, students]);
 
-  const handleDueDateChange = (id: number, value: string) => {
-    setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, dueDate: value } : s)));
-  };
+  // Initialize data
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+
+  // Fetch streams when class changes
+  useEffect(() => {
+    if (selectedClass) {
+      fetchStreams(selectedClass);
+    } else {
+      setStreams([]);
+      setSelectedStream("");
+      setSubjects([]);
+      setSelectedSubject("");
+    }
+  }, [selectedClass, fetchStreams]);
+
+  // Fetch subjects when stream changes
+  useEffect(() => {
+    if (selectedClass && selectedStream) {
+      fetchSubjects(selectedClass, selectedStream);
+    } else {
+      setSubjects([]);
+      setSelectedSubject("");
+    }
+  }, [selectedStream, selectedClass, fetchSubjects]);
+
+  // Fetch students when stream is selected
+  useEffect(() => {
+    if (selectedStream) {
+      fetchStudents(selectedClass, selectedStream);
+    } else {
+      setStudents([]);
+      setFilteredStudents([]);
+    }
+  }, [selectedStream, selectedClass, fetchStudents]);
+
+  const cacheStats = getCacheStats();
+
+  // Loading state
+  if (loading && students.length === 0) {
+    return (
+      <div className="p-6 bg-[#F8FAFC] min-h-screen flex flex-col items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-violet-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold text-slate-700">Loading Assignment Manager</h2>
+          <p className="text-slate-500 mt-2">Fetching your teaching assignments and classes...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-[#F8FAFC] min-h-screen space-y-8">
-      {/* 1. Header */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-violet-100">
@@ -65,151 +260,182 @@ const Assignments: React.FC = () => {
           </div>
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tight">Assignment Manager</h1>
-            <p className="text-slate-500 font-medium">Distribute learning tasks and track deadlines.</p>
+            <p className="text-slate-500 font-medium">Distribute learning tasks with files and track deadlines.</p>
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* 2. Left Column: Filters & Bulk Actions */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Class Filters */}
-          <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2rem] p-6 space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Users size={14} /> Target Audience
-            </h3>
-            <div className="space-y-3">
-              <select
-                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-violet-500/20 outline-none transition-all"
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-              >
-                <option value="">Select Class</option>
-                {classes.map((c) => <option key={c}>{c}</option>)}
-              </select>
-              <select
-                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-violet-500/20 outline-none transition-all"
-                value={selectedStream}
-                onChange={(e) => setSelectedStream(e.target.value)}
-              >
-                <option value="">Select Stream</option>
-                {streams.map((s) => <option key={s}>{s}</option>)}
-              </select>
+        
+        <div className="flex items-center gap-3">
+          {loading && (
+            <div className="flex items-center gap-2 text-slate-500">
+              <Loader2 size={20} className="animate-spin" />
+              <span className="text-sm">Loading data...</span>
             </div>
-          </Card>
-
-          {/* Bulk Assign Tools */}
-          <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2rem] p-6 bg-violet-600 text-white space-y-4">
-            <div className="flex items-center gap-2">
-              <PlusCircle size={18} />
-              <h3 className="text-xs font-black uppercase tracking-widest text-violet-100">Quick Bulk Assign</h3>
+          )}
+          
+          {initError && (
+            <div className="flex items-center gap-2 bg-red-50 text-red-700 px-3 py-2 rounded-xl text-sm">
+              <AlertCircle size={16} />
+              <span>{initError}</span>
             </div>
-            <div className="space-y-3">
-              <input 
-                type="text" 
-                placeholder="Homework Title"
-                value={bulkTitle}
-                onChange={(e) => setBulkTitle(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-sm placeholder:text-violet-200 focus:bg-white/20 outline-none transition-all"
-              />
-              <input 
-                type="date" 
-                value={bulkDate}
-                onChange={(e) => setBulkDate(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-sm focus:bg-white/20 outline-none transition-all"
-              />
-              <button 
-                onClick={handleApplyBulk}
-                className="w-full py-3 bg-white text-violet-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-violet-50 transition-all flex items-center justify-center gap-2"
-              >
-                <Copy size={14} /> Apply to Class
-              </button>
-            </div>
-          </Card>
-        </div>
-
-        {/* 3. Right Column: Student Table */}
-        <div className="lg:col-span-8">
-          <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] p-0 overflow-hidden bg-white min-h-[500px]">
-            <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-               <div className="relative w-1/2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                  <input 
-                    type="text" 
-                    placeholder="Search students..." 
-                    className="w-full pl-10 pr-4 py-2 bg-white border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-violet-500/10" 
-                  />
-               </div>
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                 {students.length} Total Learners
-               </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">
-                    <th className="px-6 py-4 text-left">Student</th>
-                    <th className="px-6 py-4 text-left">Task Description</th>
-                    <th className="px-6 py-4 text-left">Deadline</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {students.map((student) => (
-                    <tr key={student.id} className="hover:bg-slate-50/30 transition-colors group">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 group-hover:bg-violet-100 group-hover:text-violet-600 transition-all">
-                            {student.name.charAt(0)}
-                          </div>
-                          <span className="text-sm font-bold text-slate-700">{student.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="relative flex items-center">
-                          <FileText size={14} className="absolute left-3 text-slate-300" />
-                          <input
-                            type="text"
-                            placeholder="Set individual task..."
-                            className="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-xl text-xs font-bold text-slate-600 focus:bg-white focus:ring-2 focus:ring-violet-500/10 transition-all"
-                            value={student.assignment || ""}
-                            onChange={(e) => handleAssignmentChange(student.id, e.target.value)}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2">
-                          <CalendarIcon size={14} className="text-slate-300" />
-                          <input
-                            type="date"
-                            className="bg-transparent border-none text-xs font-bold text-slate-500 outline-none"
-                            value={student.dueDate || ""}
-                            onChange={(e) => handleDueDateChange(student.id, e.target.value)}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Sticky Action Footer */}
-            <div className="p-8 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
-               <div className="flex items-center gap-2 text-emerald-600">
-                 <CheckCircle size={16} />
-                 <span className="text-xs font-black uppercase tracking-widest">Saved locally</span>
-               </div>
-               <button
-                 onClick={() => alert("Assignments sent to Parent-Teacher Portal")}
-                 className="flex items-center gap-3 px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-violet-600 hover:-translate-y-1 transition-all active:scale-95"
-               >
-                 <Send size={18} /> Publish to Portal
-               </button>
-            </div>
-          </Card>
+          )}
+          
+          <CacheManager 
+            cacheStats={cacheStats}
+            refreshing={refreshing}
+            onRefresh={() => refreshData(selectedClass, selectedStream)}
+            onClearCache={clearCache}
+          />
         </div>
       </div>
+
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-200">
+        <button
+          className={`px-6 py-3 font-bold text-sm uppercase tracking-widest transition-colors ${
+            activeTab === 'create'
+              ? 'text-violet-600 border-b-2 border-violet-600'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+          onClick={() => setActiveTab('create')}
+        >
+          Create Assignments
+        </button>
+        <button
+          className={`px-6 py-3 font-bold text-sm uppercase tracking-widest transition-colors ${
+            activeTab === 'view'
+              ? 'text-violet-600 border-b-2 border-violet-600'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+          onClick={() => setActiveTab('view')}
+        >
+          View & Grade
+        </button>
+      </div>
+
+      {initError && (
+        <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="text-red-600" size={20} />
+            <div>
+              <p className="text-red-700 font-medium">{initError}</p>
+              <p className="text-sm text-red-600 mt-1">
+                Please check if you have been assigned to any classes. Contact your administrator if this issue persists.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'create' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column: Filters & Bulk Actions */}
+          <div className="lg:col-span-4 space-y-6">
+            {/* Academic Year & Term Selection */}
+            <AcademicPeriodFilter
+              selectedAcademicYear={selectedAcademicYear}
+              selectedTerm={selectedTerm}
+              academicYears={academicYears}
+              terms={terms}
+              loadingYears={loadingYears}
+              loadingTerms={loadingTerms}
+              onAcademicYearChange={setSelectedAcademicYear}
+              onTermChange={setSelectedTerm}
+            />
+
+            {/* Class Filters */}
+            <ClassFilter
+              selectedClass={selectedClass}
+              selectedStream={selectedStream}
+              classes={classes}
+              streams={streams}
+              loading={loading}
+              onClassChange={setSelectedClass}
+              onStreamChange={setSelectedStream}
+            />
+
+            {/* Bulk Assignment Creator */}
+            <AssignmentCreator
+              selectedStream={selectedStream}
+              students={students}
+              subjects={subjects}
+              bulkTitle={bulkTitle}
+              bulkDescription={bulkDescription}
+              bulkDate={bulkDate}
+              bulkSubject={bulkSubject}
+              bulkType={bulkType}
+              bulkMaxScore={bulkMaxScore}
+              bulkWeight={bulkWeight}
+              bulkFiles={bulkFiles}
+              onBulkTitleChange={setBulkTitle}
+              onBulkDescriptionChange={setBulkDescription}
+              onBulkDateChange={setBulkDate}
+              onBulkSubjectChange={setBulkSubject}
+              onBulkTypeChange={setBulkType}
+              onBulkMaxScoreChange={setBulkMaxScore}
+              onBulkWeightChange={setBulkWeight}
+              onBulkFilesChange={setBulkFiles}
+              onBulkApply={(updates) => {
+                const updatedStudents = students.map(student => ({
+                  ...student,
+                  ...updates
+                }));
+                setStudents(updatedStudents);
+              }}
+            />
+            
+            {/* Stats Card */}
+            <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2rem] p-6">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <Database size={14} /> Quick Stats
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">Total Students</span>
+                  <span className="text-lg font-bold text-slate-800">{students.length}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">Assignments Set</span>
+                  <span className="text-lg font-bold text-emerald-600">
+                    {students.filter(s => s.assignment).length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">Total Files</span>
+                  <span className="text-lg font-bold text-violet-600">
+                    {students.reduce((acc, s) => acc + (s.files?.length || 0), 0)}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Right Column: Student Table */}
+          <div className="lg:col-span-8">
+            <StudentTable
+              selectedStream={selectedStream}
+              filteredStudents={filteredStudents}
+              subjects={subjects}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onStudentUpdate={(studentId, updates) => {
+                setStudents(prev => prev.map(s => 
+                  s.student.id === studentId ? { ...s, ...updates } : s
+                ));
+              }}
+              onPublish={async (saving, setSaving) => {
+                await handlePublishAssignments(saving, setSaving);
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <AssignmentViewer
+          selectedClass={selectedClass}
+          selectedStream={selectedStream}
+          selectedTerm={selectedTerm}
+          selectedAcademicYear={selectedAcademicYear}
+        />
+      )}
     </div>
   );
 };

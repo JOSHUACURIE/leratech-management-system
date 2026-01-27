@@ -714,32 +714,6 @@ const handleForgotPassword = async (e: React.FormEvent) => {
         </p>
       )}
 
-      {/* Development Quick Access */}
-      {!showForgotPassword && isDevelopment && (
-        <div className="mt-6 pt-6 border-t border-slate-100">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Sparkles size={14} className="text-amber-500" />
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Development Quick Access
-            </p>
-            <Sparkles size={14} className="text-amber-500" />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {["admin", "teacher", "parent", "bursar"].map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => quickFill(role)}
-                className="py-2.5 rounded-lg border border-slate-100 bg-white text-xs font-semibold uppercase text-slate-500 hover:bg-gradient-to-br hover:from-indigo-50 hover:to-violet-50 hover:border-indigo-200 hover:text-indigo-600 transition-all hover:shadow-sm"
-                disabled={isLoading}
-              >
-                {role}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Footer */}
       <div className="mt-8 pt-6 border-t border-slate-100">
         <p className="text-center text-slate-400 text-xs">
