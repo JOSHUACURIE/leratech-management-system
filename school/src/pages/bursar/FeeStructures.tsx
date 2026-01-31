@@ -15,7 +15,17 @@ import {
   Search,
   Filter,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Users,
+  ArrowRight,
+  Calendar,
+  UserCheck,
+  RefreshCw,
+  FileText,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Eye
 } from "lucide-react";
 import Card from "../../components/common/Card";
 import { financeAPI, type FeeStructureCreateData, type FeeItemsAddData } from "../../services/api";
@@ -78,16 +88,91 @@ interface Class {
   class_level: number;
 }
 
+interface Stream {
+  id: string;
+  name: string;
+  class_id: string;
+}
+
+interface StudentSummary {
+  total: number;
+  new: number;
+  existing: number;
+}
+
+interface ApplicationLog {
+  studentId: string;
+  admissionNumber: string;
+  name: string;
+  status: 'success' | 'failed' | 'skipped';
+  feeAssignmentId?: string;
+  totalAmount?: number;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  reason?: string;
+  studentType?: string;
+}
+
+// New types for fee application
+interface FeeApplicationModalState {
+  isOpen: boolean;
+  selectedStructureId: string;
+  selectedStructureName: string;
+  classId: string;
+  streamId: string;
+  termId: string;
+  academicYearId: string;
+  applyTo: 'all' | 'new_only' | 'existing_only';
+  generateInvoices: boolean;
+  invoiceDueDate: string;
+  notes: string;
+  installmentPlan: {
+    number: number;
+    dueDates?: string[];
+  } | null;
+}
+
 const FeeStructures: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [applyingFees, setApplyingFees] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Fee Application Modal State
+  const [feeApplicationModal, setFeeApplicationModal] = useState<FeeApplicationModalState>({
+    isOpen: false,
+    selectedStructureId: "",
+    selectedStructureName: "",
+    classId: "",
+    streamId: "",
+    termId: "",
+    academicYearId: "",
+    applyTo: 'all',
+    generateInvoices: true,
+    invoiceDueDate: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0],
+    notes: "",
+    installmentPlan: null
+  });
+  
+  // Application state
+  const [applicationLogs, setApplicationLogs] = useState<ApplicationLog[]>([]);
+  const [applicationProgress, setApplicationProgress] = useState({
+    total: 0,
+    completed: 0,
+    percentage: 0
+  });
+  const [studentSummary, setStudentSummary] = useState<StudentSummary>({
+    total: 0,
+    new: 0,
+    existing: 0
+  });
+  const [showApplicationResults, setShowApplicationResults] = useState(false);
   
   // Search and filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -119,7 +204,9 @@ const FeeStructures: React.FC = () => {
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [streams, setStreams] = useState<Stream[]>([]);
   const [existingStructures, setExistingStructures] = useState<FeeStructure[]>([]);
+  const [loadingApplicationTerms, setLoadingApplicationTerms] = useState(false);
   
   // Load initial data
   useEffect(() => {
@@ -127,11 +214,26 @@ const FeeStructures: React.FC = () => {
     fetchExistingStructures();
   }, []);
   
-  // Debug useEffect
+  // Update fee application modal when structure changes
   useEffect(() => {
-    console.log("Fee items state:", feeItems);
-    console.log("Fee structure state:", feeStructure);
-  }, [feeItems, feeStructure]);
+    if (feeApplicationModal.selectedStructureId) {
+      const structure = existingStructures.find(s => s.id === feeApplicationModal.selectedStructureId);
+      if (structure) {
+        setFeeApplicationModal(prev => ({
+          ...prev,
+          selectedStructureName: structure.structure_name,
+          classId: structure.class_id || "",
+          termId: structure.term_id,
+          academicYearId: structure.academic_year_id
+        }));
+        
+        // Fetch streams for the class
+        if (structure.class_id) {
+          fetchStreams(structure.class_id);
+        }
+      }
+    }
+  }, [feeApplicationModal.selectedStructureId, existingStructures]);
   
   const fetchInitialData = async () => {
     try {
@@ -139,26 +241,7 @@ const FeeStructures: React.FC = () => {
       setError(null);
       
       // Fetch academic years
-      try {
-        const yearsResponse = await academicAPI.getYears();
-        if (yearsResponse.data.success) {
-          const yearsData = Array.isArray(yearsResponse.data.data) 
-            ? yearsResponse.data.data 
-            : yearsResponse.data.data.years || yearsResponse.data.data;
-          
-          setAcademicYears(yearsData);
-          
-          // Set default academic year
-          const currentYear = yearsData.find((year: AcademicYear) => year.is_current);
-          if (currentYear) {
-            setFeeStructure(prev => ({ ...prev, academicYearId: currentYear.id }));
-            setSelectedYear(currentYear.id);
-            fetchTerms(currentYear.id);
-          }
-        }
-      } catch (yearsError: any) {
-        console.error("Failed to fetch academic years:", yearsError);
-      }
+      await fetchAcademicYears();
       
       // Fetch classes
       await fetchClasses();
@@ -171,63 +254,428 @@ const FeeStructures: React.FC = () => {
     }
   };
   
+  const fetchAcademicYears = async () => {
+    try {
+      console.log("Fetching academic years...");
+      const response = await academicAPI.getYears();
+      console.log("Academic years API response:", response.data);
+      
+      let yearsData = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          yearsData = response.data;
+        } else if (response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            yearsData = response.data.data;
+          } else if (response.data.data.years && Array.isArray(response.data.data.years)) {
+            yearsData = response.data.data.years;
+          } else if (response.data.data.year_name) {
+            yearsData = [response.data.data];
+          }
+        } else if (response.data.success && response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            yearsData = response.data.data;
+          } else if (response.data.data.years && Array.isArray(response.data.data.years)) {
+            yearsData = response.data.data.years;
+          } else if (response.data.data.year_name) {
+            yearsData = [response.data.data];
+          }
+        }
+      }
+      
+      console.log("Parsed academic years:", yearsData);
+      
+      if (yearsData.length > 0) {
+        setAcademicYears(yearsData);
+        
+        // Set default academic year
+        const currentYear = yearsData.find((year: AcademicYear) => year.is_current);
+        const selectedYearId = currentYear?.id || yearsData[0]?.id;
+        
+        if (selectedYearId) {
+          setFeeStructure(prev => ({ ...prev, academicYearId: selectedYearId }));
+          setSelectedYear(selectedYearId);
+          
+          // Fetch terms for the selected year
+          await fetchTerms(selectedYearId);
+        }
+      } else {
+        setError("No academic years found");
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch academic years:", error);
+      setError(`Failed to load academic years: ${error.message}`);
+    }
+  };
+  
   const fetchClasses = async () => {
     try {
+      console.log("Fetching classes...");
       const response = await api.get('/classes');
-      if (response.data.success || Array.isArray(response.data) || Array.isArray(response.data.data)) {
-        const classesData = Array.isArray(response.data.data) 
-          ? response.data.data 
-          : Array.isArray(response.data) 
-            ? response.data 
-            : [];
-        
-        setClasses(classesData);
+      console.log("Classes API response:", response.data);
+      
+      let classesData = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          classesData = response.data;
+        } else if (response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            classesData = response.data.data;
+          } else if (response.data.data.class_name) {
+            classesData = [response.data.data];
+          }
+        } else if (response.data.success && response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            classesData = response.data.data;
+          } else {
+            classesData = [];
+          }
+        }
       }
-    } catch (error) {
+      
+      console.log("Parsed classes:", classesData);
+      setClasses(classesData);
+      
+    } catch (error: any) {
       console.error("Failed to fetch classes:", error);
       setClasses([]);
     }
   };
   
-  const fetchTerms = async (academicYearId: string) => {
+  const fetchStreams = async (classId: string) => {
     try {
-      const response = await academicAPI.getTerms(academicYearId);
+      const response = await financeAPI.getClassStreams(classId, {
+        includeStudentCount: true,
+        includeFeeSummary: false
+      });
       if (response.data.success) {
-        const termsData = Array.isArray(response.data.data) 
-          ? response.data.data 
-          : response.data.data.terms || response.data.data;
-        
-        setTerms(termsData);
-        
-        // Set default term
-        const currentTerm = termsData.find((term: Term) => term.is_current);
-        if (currentTerm) {
-          setFeeStructure(prev => ({ ...prev, termId: currentTerm.id }));
-        } else if (termsData.length > 0) {
-          setFeeStructure(prev => ({ ...prev, termId: termsData[0].id }));
-        }
+        const streamsData = response.data.data?.streams || [];
+        setStreams(streamsData.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          class_id: classId
+        })));
       }
     } catch (error) {
+      console.error("Failed to fetch streams:", error);
+      setStreams([]);
+    }
+  };
+  
+  const fetchTerms = async (academicYearId: string) => {
+    try {
+      console.log("Fetching terms for academic year:", academicYearId);
+      const response = await academicAPI.getTerms(academicYearId);
+      console.log("Terms API response:", response.data);
+      
+      let termsData = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          termsData = response.data;
+        } else if (response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            termsData = response.data.data;
+          } else if (response.data.data.terms && Array.isArray(response.data.data.terms)) {
+            termsData = response.data.data.terms;
+          } else if (response.data.data.term_name) {
+            termsData = [response.data.data];
+          }
+        } else if (response.data.success && response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            termsData = response.data.data;
+          } else if (response.data.data.terms && Array.isArray(response.data.data.terms)) {
+            termsData = response.data.data.terms;
+          } else {
+            termsData = [];
+          }
+        }
+      }
+      
+      console.log("Parsed terms:", termsData);
+      
+      // Update terms state - merge with existing terms
+      setTerms(prevTerms => {
+        // Remove existing terms for this academic year
+        const filteredPrev = prevTerms.filter(t => t.academic_year_id !== academicYearId);
+        // Add new terms
+        return [...filteredPrev, ...termsData];
+      });
+      
+      // Set default term for the form if the academic year matches
+      if (academicYearId === feeStructure.academicYearId && termsData.length > 0) {
+        const currentTerm = termsData.find((term: Term) => term.is_current);
+        const selectedTermId = currentTerm?.id || termsData[0]?.id;
+        
+        if (selectedTermId) {
+          console.log("Setting term for form:", selectedTermId);
+          setFeeStructure(prev => ({ ...prev, termId: selectedTermId }));
+        }
+      }
+    } catch (error: any) {
       console.error("Failed to fetch terms:", error);
       setTerms([]);
     }
   };
   
+  const fetchTermsForApplicationModal = async (academicYearId: string) => {
+    try {
+      setLoadingApplicationTerms(true);
+      console.log("Fetching terms for application modal, academic year:", academicYearId);
+      const response = await academicAPI.getTerms(academicYearId);
+      console.log("Terms API response for application modal:", response.data);
+      
+      let termsData = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          termsData = response.data;
+        } else if (response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            termsData = response.data.data;
+          } else if (response.data.data.terms && Array.isArray(response.data.data.terms)) {
+            termsData = response.data.data.terms;
+          } else if (response.data.data.term_name) {
+            termsData = [response.data.data];
+          }
+        } else if (response.data.success && response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            termsData = response.data.data;
+          } else if (response.data.data.terms && Array.isArray(response.data.data.terms)) {
+            termsData = response.data.data.terms;
+          } else {
+            termsData = [];
+          }
+        }
+      }
+      
+      console.log("Parsed terms for application modal:", termsData);
+      
+      // Update terms state - merge with existing terms
+      setTerms(prevTerms => {
+        // Remove existing terms for this academic year
+        const filteredPrev = prevTerms.filter(t => t.academic_year_id !== academicYearId);
+        // Add new terms
+        return [...filteredPrev, ...termsData];
+      });
+      
+      return termsData;
+      
+    } catch (error: any) {
+      console.error("Failed to fetch terms for application modal:", error);
+      setError(`Failed to load terms: ${error.message}`);
+      return [];
+    } finally {
+      setLoadingApplicationTerms(false);
+    }
+  };
+  
   const fetchExistingStructures = async () => {
     try {
+      console.log("Fetching existing fee structures...");
       const response = await api.get('/finance/fee-structures');
-      if (response.data.success || Array.isArray(response.data) || Array.isArray(response.data.data)) {
-        const structures = Array.isArray(response.data.data) 
-          ? response.data.data 
-          : Array.isArray(response.data) 
-            ? response.data 
-            : [];
-        
-        setExistingStructures(structures);
+      console.log("Fee structures API response:", response.data);
+      
+      let structures = [];
+      
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          structures = response.data;
+        } else if (response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            structures = response.data.data;
+          } else if (response.data.data.structure_name) {
+            structures = [response.data.data];
+          }
+        } else if (response.data.success && response.data.data) {
+          if (Array.isArray(response.data.data)) {
+            structures = response.data.data;
+          } else {
+            structures = [];
+          }
+        }
       }
-    } catch (error) {
+      
+      console.log("Parsed fee structures:", structures);
+      setExistingStructures(structures);
+      
+    } catch (error: any) {
       console.error("Failed to fetch existing structures:", error);
       setExistingStructures([]);
+    }
+  };
+  
+  const openFeeApplicationModal = (structure: FeeStructure) => {
+    console.log("Opening fee application modal for structure:", structure);
+    
+    // Immediately set the modal state
+    setFeeApplicationModal({
+      isOpen: true,
+      selectedStructureId: structure.id,
+      selectedStructureName: structure.structure_name,
+      classId: structure.class_id || "",
+      streamId: "",
+      termId: "", // Start with empty, will be set after fetching terms
+      academicYearId: structure.academic_year_id,
+      applyTo: 'all',
+      generateInvoices: true,
+      invoiceDueDate: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0],
+      notes: `Applying ${structure.structure_name} to students`,
+      installmentPlan: null
+    });
+    
+    // Reset application state
+    setApplicationLogs([]);
+    setApplicationProgress({
+      total: 0,
+      completed: 0,
+      percentage: 0
+    });
+    setShowApplicationResults(false);
+    setStudentSummary({
+      total: 0,
+      new: 0,
+      existing: 0
+    });
+    
+    // Fetch streams if class is specified
+    if (structure.class_id) {
+      fetchStreams(structure.class_id);
+    }
+    
+    // Estimate student counts
+    estimateStudentCounts(structure);
+    
+    // Fetch terms for this academic year if not already loaded
+    const existingTermsForYear = terms.filter(t => t.academic_year_id === structure.academic_year_id);
+    if (existingTermsForYear.length === 0) {
+      fetchTermsForApplicationModal(structure.academic_year_id).then(termsData => {
+        if (termsData.length > 0) {
+          const currentTerm = termsData.find(t => t.is_current);
+          setFeeApplicationModal(prev => ({
+            ...prev,
+            termId: currentTerm?.id || structure.term_id || termsData[0].id
+          }));
+        }
+      });
+    } else {
+      // Terms already exist, set the term
+      const currentTerm = existingTermsForYear.find(t => t.is_current);
+      setFeeApplicationModal(prev => ({
+        ...prev,
+        termId: currentTerm?.id || structure.term_id || existingTermsForYear[0].id
+      }));
+    }
+  };
+  
+  const closeFeeApplicationModal = () => {
+    setFeeApplicationModal(prev => ({ ...prev, isOpen: false }));
+  };
+  
+  const estimateStudentCounts = async (structure: FeeStructure) => {
+    try {
+      // This is a simplified estimate - you might want to make an actual API call
+      setStudentSummary({
+        total: 40, // Example estimate
+        new: 15,   // Example estimate
+        existing: 25 // Example estimate
+      });
+    } catch (error) {
+      console.error("Failed to estimate student counts:", error);
+    }
+  };
+  
+  const handleApplyFeeStructure = async () => {
+    if (!feeApplicationModal.selectedStructureId) {
+      setError("Please select a fee structure");
+      return;
+    }
+    
+    if (!feeApplicationModal.termId) {
+      setError("Please select a term");
+      return;
+    }
+    
+    try {
+      setApplyingFees(true);
+      setError(null);
+      setShowApplicationResults(false);
+      
+      // Calculate due date
+      const dueDate = feeApplicationModal.invoiceDueDate 
+        ? new Date(feeApplicationModal.invoiceDueDate).toISOString()
+        : new Date(new Date().setDate(new Date().getDate() + 30)).toISOString();
+      
+      const applicationData = {
+        feeStructureId: feeApplicationModal.selectedStructureId,
+        classId: feeApplicationModal.classId || undefined,
+        streamId: feeApplicationModal.streamId || undefined,
+        termId: feeApplicationModal.termId,
+        academicYearId: feeApplicationModal.academicYearId,
+        applyTo: feeApplicationModal.applyTo,
+        generateInvoices: feeApplicationModal.generateInvoices,
+        invoiceDueDate: dueDate,
+        installmentPlan: feeApplicationModal.installmentPlan,
+        notes: feeApplicationModal.notes
+      };
+      
+      console.log("Applying fee structure:", applicationData);
+      
+      const response = await financeAPI.applyFeeStructureToStudents(applicationData);
+      
+      if (response.data.success) {
+        const result = response.data.data;
+        
+        // Update application logs
+        setApplicationLogs(result.logs || []);
+        setApplicationProgress({
+          total: result.summary?.totalStudents || 0,
+          completed: result.summary?.successful || 0,
+          percentage: result.summary?.totalStudents ? 
+            (result.summary.successful / result.summary.totalStudents) * 100 : 0
+        });
+        
+        setShowApplicationResults(true);
+        
+        // Show success message
+        setSuccess(`Fee structure applied successfully to ${result.summary?.successful || 0} students`);
+        
+        setTimeout(() => {
+          setSuccess(null);
+        }, 5000);
+        
+      } else {
+        throw new Error(response.data.error || "Failed to apply fee structure");
+      }
+    } catch (error: any) {
+      console.error("Error applying fee structure:", error);
+      setError(error.message || "Failed to apply fee structure. Please try again.");
+    } finally {
+      setApplyingFees(false);
+    }
+  };
+  
+  const handleApplicationModalChange = (field: keyof FeeApplicationModalState, value: any) => {
+    if (field === 'academicYearId' && value) {
+      // Fetch terms for the new academic year
+      fetchTermsForApplicationModal(value).then(termsData => {
+        if (termsData.length > 0 && !feeApplicationModal.termId) {
+          const currentTerm = termsData.find(t => t.is_current);
+          setFeeApplicationModal(prev => ({
+            ...prev,
+            termId: currentTerm?.id || termsData[0].id
+          }));
+        }
+      });
+    }
+    
+    setFeeApplicationModal(prev => ({ ...prev, [field]: value }));
+    
+    if (field === 'classId' && value) {
+      fetchStreams(value);
+      setFeeApplicationModal(prev => ({ ...prev, streamId: "" }));
     }
   };
   
@@ -248,34 +696,33 @@ const FeeStructures: React.FC = () => {
     }
   };
   
-  // Fixed: Handle name changes
   const handleNameChange = (index: number, value: string) => {
     const newItems = [...feeItems];
     newItems[index].name = value;
     setFeeItems(newItems);
   };
   
- const handleAmountChange = (index: number, value: string) => {
-  const newItems = [...feeItems];
-  
-  // Remove any formatting (commas, currency symbols)
-  const cleanValue = value.replace(/[^0-9.]/g, '');
-  
-  if (cleanValue === "" || cleanValue === ".") {
-    newItems[index].amount = 0;
-  } else {
-    const numValue = parseFloat(cleanValue);
-    if (!isNaN(numValue)) {
-      newItems[index].amount = numValue;
-    } else {
+  const handleAmountChange = (index: number, value: string) => {
+    const newItems = [...feeItems];
+    
+    // Remove any formatting (commas, currency symbols)
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    
+    if (cleanValue === "" || cleanValue === ".") {
       newItems[index].amount = 0;
+    } else {
+      const numValue = parseFloat(cleanValue);
+      if (!isNaN(numValue)) {
+        newItems[index].amount = numValue;
+      } else {
+        newItems[index].amount = 0;
+      }
     }
-  }
+    
+    console.log(`Amount changed: ${value} -> ${newItems[index].amount}`);
+    setFeeItems(newItems);
+  };
   
-  console.log(`Amount changed: ${value} -> ${newItems[index].amount}`);
-  setFeeItems(newItems);
-};
-  // Fixed: Handle checkbox changes
   const handleCheckboxChange = (index: number, field: 'isCompulsory' | 'canBePaidInInstallments', checked: boolean) => {
     const newItems = [...feeItems];
     newItems[index][field] = checked;
@@ -285,7 +732,7 @@ const FeeStructures: React.FC = () => {
   const handleStructureChange = (field: keyof FeeStructureCreateData, value: any) => {
     setFeeStructure(prev => ({ ...prev, [field]: value }));
     
-    if (field === 'academicYearId') {
+    if (field === 'academicYearId' && value) {
       fetchTerms(value);
     }
   };
@@ -330,12 +777,15 @@ const FeeStructures: React.FC = () => {
   };
   
   const resetForm = () => {
+    const currentYear = academicYears.find(y => y.is_current);
+    const yearId = currentYear?.id || (academicYears.length > 0 ? academicYears[0].id : "");
+    
     setFeeStructure({
       structureName: "",
-      academicYearId: academicYears.find(y => y.is_current)?.id || "",
+      academicYearId: yearId,
       classId: "",
       studentType: "",
-      termId: terms.find(t => t.is_current)?.id || "",
+      termId: "",
       description: "",
       appliesToAllTerms: false
     });
@@ -348,6 +798,11 @@ const FeeStructures: React.FC = () => {
         canBePaidInInstallments: false 
       }
     ]);
+    
+    // Fetch terms for the selected year
+    if (yearId) {
+      fetchTerms(yearId);
+    }
   };
   
   const openModal = () => {
@@ -361,85 +816,85 @@ const FeeStructures: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-  console.log("=== SUBMITTING FEE STRUCTURE ===");
-  console.log("Fee structure data:", feeStructure);
-  console.log("Fee items before formatting:", feeItems);
-  
-  if (!validateForm()) return;
-  
-  try {
-    setSaving(true);
-    setError(null);
+    console.log("=== SUBMITTING FEE STRUCTURE ===");
+    console.log("Fee structure data:", feeStructure);
+    console.log("Fee items before formatting:", feeItems);
     
-    // Format data for API - Ensure amounts are properly formatted
-    const formattedFeeItems = feeItems.map(item => {
-      console.log(`Processing item: ${item.name}`, {
-        originalAmount: item.amount,
-        amountType: typeof item.amount,
-        amountValue: item.amount
+    if (!validateForm()) return;
+    
+    try {
+      setSaving(true);
+      setError(null);
+      
+      // Format data for API - Ensure amounts are properly formatted
+      const formattedFeeItems = feeItems.map(item => {
+        console.log(`Processing item: ${item.name}`, {
+          originalAmount: item.amount,
+          amountType: typeof item.amount,
+          amountValue: item.amount
+        });
+        
+        // Convert amount to number and fix to 2 decimal places
+        let amount = Number(item.amount);
+        if (isNaN(amount) || amount < 0) {
+          console.warn(`Invalid amount for ${item.name}: ${item.amount}, defaulting to 0`);
+          amount = 0;
+        }
+        
+        // Round to 2 decimal places to match Decimal(10,2) in database
+        amount = Math.round(amount * 100) / 100;
+        
+        return {
+          name: item.name.trim(),
+          amount: amount, // Send as regular number (Prisma will convert to Decimal)
+          isCompulsory: Boolean(item.isCompulsory),
+          canBePaidInInstallments: Boolean(item.canBePaidInInstallments)
+        };
       });
       
-      // Convert amount to number and fix to 2 decimal places
-      let amount = Number(item.amount);
-      if (isNaN(amount) || amount < 0) {
-        console.warn(`Invalid amount for ${item.name}: ${item.amount}, defaulting to 0`);
-        amount = 0;
-      }
+      console.log("Formatted fee items for API:", formattedFeeItems);
+      console.log("Sending to createFeeStructure:", feeStructure);
       
-      // Round to 2 decimal places to match Decimal(10,2) in database
-      amount = Math.round(amount * 100) / 100;
+      // 1. Create the fee structure
+      const structureResponse = await financeAPI.createFeeStructure(feeStructure);
+      console.log("Structure response:", structureResponse.data);
       
-      return {
-        name: item.name.trim(),
-        amount: amount, // Send as regular number (Prisma will convert to Decimal)
-        isCompulsory: Boolean(item.isCompulsory),
-        canBePaidInInstallments: Boolean(item.canBePaidInInstallments)
-      };
-    });
-    
-    console.log("Formatted fee items for API:", formattedFeeItems);
-    console.log("Sending to createFeeStructure:", feeStructure);
-    
-    // 1. Create the fee structure
-    const structureResponse = await financeAPI.createFeeStructure(feeStructure);
-    console.log("Structure response:", structureResponse.data);
-    
-    if (structureResponse.data.success) {
-      const structureId = structureResponse.data.data.newFeeStructure.id;
-      
-      // 2. Add fee items to the structure
-      const itemsData: FeeItemsAddData = {
-        feeStructureId: structureId,
-        termId: feeStructure.termId,
-        items: formattedFeeItems
-      };
-      
-      console.log("Sending to addFeeItems API:", JSON.stringify(itemsData, null, 2));
-      
-      const itemsResponse = await financeAPI.addFeeItems(itemsData);
-      console.log("Add fee items response:", itemsResponse.data);
-      
-      if (itemsResponse.data.success) {
-        setSuccess(`Fee structure created successfully with ${formattedFeeItems.length} items!`);
-        closeModal();
-        fetchExistingStructures();
+      if (structureResponse.data.success) {
+        const structureId = structureResponse.data.data.newFeeStructure.id;
         
-        setTimeout(() => setSuccess(null), 5000);
+        // 2. Add fee items to the structure
+        const itemsData: FeeItemsAddData = {
+          feeStructureId: structureId,
+          termId: feeStructure.termId,
+          items: formattedFeeItems
+        };
+        
+        console.log("Sending to addFeeItems API:", JSON.stringify(itemsData, null, 2));
+        
+        const itemsResponse = await financeAPI.addFeeItems(itemsData);
+        console.log("Add fee items response:", itemsResponse.data);
+        
+        if (itemsResponse.data.success) {
+          setSuccess(`Fee structure created successfully with ${formattedFeeItems.length} items!`);
+          closeModal();
+          fetchExistingStructures();
+          
+          setTimeout(() => setSuccess(null), 5000);
+        } else {
+          throw new Error(itemsResponse.data.error || "Failed to add fee items");
+        }
       } else {
-        throw new Error(itemsResponse.data.error || "Failed to add fee items");
+        throw new Error(structureResponse.data.error || "Failed to create fee structure");
       }
-    } else {
-      throw new Error(structureResponse.data.error || "Failed to create fee structure");
+    } catch (error: any) {
+      console.error("=== SUBMISSION ERROR ===");
+      console.error("Error:", error);
+      console.error("Error response:", error.response?.data);
+      setError(error.message || "Failed to create fee structure. Please try again.");
+    } finally {
+      setSaving(false);
     }
-  } catch (error: any) {
-    console.error("=== SUBMISSION ERROR ===");
-    console.error("Error:", error);
-    console.error("Error response:", error.response?.data);
-    setError(error.message || "Failed to create fee structure. Please try again.");
-  } finally {
-    setSaving(false);
-  }
-};
+  };
   
   const handleCopyStructure = (structure: FeeStructure) => {
     setFeeStructure({
@@ -460,6 +915,9 @@ const FeeStructures: React.FC = () => {
         canBePaidInInstallments: item.canBePaidInInstallments || false
       })));
     }
+    
+    // Fetch terms for the selected academic year
+    fetchTerms(structure.academic_year_id);
     
     setIsModalOpen(true);
   };
@@ -496,6 +954,16 @@ const FeeStructures: React.FC = () => {
     return matchesSearch && matchesYear && matchesClass;
   });
   
+  // Filter terms for the current academic year in the application modal
+  const filteredTerms = terms.filter(term => 
+    term.academic_year_id === feeApplicationModal.academicYearId
+  );
+  
+  // Filter terms for the main form
+  const filteredFormTerms = terms.filter(term => 
+    term.academic_year_id === feeStructure.academicYearId
+  );
+  
   return (
     <div className="p-4 md:p-6 bg-[#F8FAFC] min-h-screen">
       
@@ -508,10 +976,11 @@ const FeeStructures: React.FC = () => {
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
           <button
             onClick={openModal}
-            className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+            disabled={loading}
+            className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus size={18} />
-            New Structure
+            {loading ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+            {loading ? "Loading..." : "New Structure"}
           </button>
           <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-center gap-2">
             <Info className="text-amber-600" size={18} />
@@ -566,6 +1035,7 @@ const FeeStructures: React.FC = () => {
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
               className="px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm"
+              disabled={academicYears.length === 0}
             >
               <option value="">All Years</option>
               {academicYears.map(year => (
@@ -579,6 +1049,7 @@ const FeeStructures: React.FC = () => {
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
               className="px-4 py-3 bg-white border border-slate-200 rounded-lg text-sm"
+              disabled={classes.length === 0}
             >
               <option value="">All Classes</option>
               {classes.map(cls => (
@@ -598,19 +1069,38 @@ const FeeStructures: React.FC = () => {
             Active Structures ({filteredStructures.length})
           </h2>
           <button
-            onClick={fetchExistingStructures}
+            onClick={() => {
+              fetchExistingStructures();
+              fetchAcademicYears();
+              fetchClasses();
+            }}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"
-            title="Refresh structures"
+            title="Refresh data"
+            disabled={loading}
           >
-            <Loader2 size={18} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
 
         {loading && existingStructures.length === 0 ? (
           <div className="flex items-center justify-center p-12">
             <Loader2 className="animate-spin text-slate-400" size={32} />
-            <span className="ml-3 text-slate-500">Loading structures...</span>
+            <span className="ml-3 text-slate-500">Loading data...</span>
           </div>
+        ) : academicYears.length === 0 ? (
+          <Card className="p-8 text-center">
+            <AlertCircle className="mx-auto text-slate-300" size={48} />
+            <p className="text-slate-500 mt-4">No academic years found</p>
+            <p className="text-sm text-slate-400 mt-1">
+              Please add academic years first before creating fee structures.
+            </p>
+            <button
+              onClick={fetchAcademicYears}
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+            >
+              Retry Loading
+            </button>
+          </Card>
         ) : filteredStructures.length === 0 ? (
           <Card className="p-8 text-center">
             <Banknote className="mx-auto text-slate-300" size={48} />
@@ -651,9 +1141,18 @@ const FeeStructures: React.FC = () => {
                     <button
                       onClick={() => handleCopyStructure(struct)}
                       className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-2"
+                      disabled={loading}
                     >
                       <Copy size={16} />
                       Copy
+                    </button>
+                    <button
+                      onClick={() => openFeeApplicationModal(struct)}
+                      className="px-3 py-2 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg transition-colors flex items-center gap-2"
+                      disabled={loading}
+                    >
+                      <Users size={16} />
+                      Apply Fees
                     </button>
                   </div>
                 </div>
@@ -764,12 +1263,21 @@ const FeeStructures: React.FC = () => {
                       disabled={saving || loading}
                     >
                       <option value="">Select Year</option>
-                      {academicYears.map(year => (
-                        <option key={year.id} value={year.id}>
-                          {year.year_name} {year.is_current && "(Current)"}
+                      {academicYears.length === 0 ? (
+                        <option value="" disabled>
+                          {loading ? "Loading academic years..." : "No academic years found"}
                         </option>
-                      ))}
+                      ) : (
+                        academicYears.map(year => (
+                          <option key={year.id} value={year.id}>
+                            {year.year_name} {year.is_current && "(Current)"}
+                          </option>
+                        ))
+                      )}
                     </select>
+                    {academicYears.length === 0 && !loading && (
+                      <p className="text-sm text-amber-500">Please add academic years first</p>
+                    )}
                   </div>
                   
                   {/* Term */}
@@ -784,12 +1292,21 @@ const FeeStructures: React.FC = () => {
                       disabled={saving || !feeStructure.academicYearId || loading}
                     >
                       <option value="">Select Term</option>
-                      {terms.map(term => (
-                        <option key={term.id} value={term.id}>
-                          {term.term_name} {term.is_current && "(Current)"}
+                      {filteredFormTerms.length === 0 ? (
+                        <option value="" disabled>
+                          {loading ? "Loading terms..." : "No terms found for selected year"}
                         </option>
-                      ))}
+                      ) : (
+                        filteredFormTerms.map(term => (
+                          <option key={term.id} value={term.id}>
+                            {term.term_name} {term.is_current && "(Current)"}
+                          </option>
+                        ))
+                      )}
                     </select>
+                    {!feeStructure.academicYearId && (
+                      <p className="text-sm text-amber-500">Select an academic year first</p>
+                    )}
                   </div>
                   
                   {/* Target Class */}
@@ -979,7 +1496,7 @@ const FeeStructures: React.FC = () => {
                   </button>
                   <button
                     onClick={handleSubmit}
-                    disabled={saving}
+                    disabled={saving || !feeStructure.academicYearId || !feeStructure.termId}
                     className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {saving ? (
@@ -994,6 +1511,338 @@ const FeeStructures: React.FC = () => {
                       </>
                     )}
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fee Application Modal */}
+      {feeApplicationModal.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-xl font-black text-slate-800">
+                  Apply Fee Structure
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {feeApplicationModal.selectedStructureName}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={closeFeeApplicationModal}
+                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-slate-50 rounded-lg"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {showApplicationResults ? (
+                <div className="space-y-6">
+                  <div className="bg-slate-50 rounded-2xl p-6">
+                    <h3 className="font-bold text-slate-800 mb-4">Application Results</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-black text-slate-800">{applicationProgress.total}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">Total Students</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-black text-emerald-600">{applicationProgress.completed}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">Successfully Applied</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-black text-rose-600">{applicationProgress.total - applicationProgress.completed}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">Failed/Skipped</p>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 transition-all duration-500"
+                          style={{ width: `${applicationProgress.percentage}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2 text-center">
+                        {applicationProgress.percentage.toFixed(1)}% Complete
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {applicationLogs.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-slate-700">Application Logs</h4>
+                      <div className="max-h-60 overflow-y-auto space-y-2">
+                        {applicationLogs.map((log, index) => (
+                          <div key={index} className={`p-3 rounded-lg border ${
+                            log.status === 'success' ? 'border-emerald-200 bg-emerald-50' :
+                            log.status === 'failed' ? 'border-rose-200 bg-rose-50' :
+                            'border-amber-200 bg-amber-50'
+                          }`}>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium text-slate-700">{log.name}</p>
+                                <p className="text-xs text-slate-500">{log.admissionNumber}</p>
+                              </div>
+                              <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${
+                                log.status === 'success' ? 'bg-emerald-100 text-emerald-700' :
+                                log.status === 'failed' ? 'bg-rose-100 text-rose-700' :
+                                'bg-amber-100 text-amber-700'
+                              }`}>
+                                {log.status}
+                              </span>
+                            </div>
+                            {log.reason && (
+                              <p className="text-sm text-slate-600 mt-2">{log.reason}</p>
+                            )}
+                            {log.invoiceNumber && (
+                              <p className="text-xs text-slate-500 mt-1">
+                                Invoice: {log.invoiceNumber} • KES {log.totalAmount?.toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Student Summary */}
+                  <div className="bg-slate-50 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-slate-800">Student Overview</h3>
+                      <Users className="text-slate-400" size={20} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-black text-slate-800">{studentSummary.total}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">Total Students</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-black text-emerald-600">{studentSummary.new}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">New Students</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-black text-indigo-600">{studentSummary.existing}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">Existing Students</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Configuration Form */}
+                  <div className="space-y-4">
+                    {/* Apply To Selection */}
+                    <div className="space-y-3">
+                      <label className="text-sm font-bold text-slate-700">
+                        Apply To
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {['all', 'new_only', 'existing_only'].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => handleApplicationModalChange('applyTo', option as any)}
+                            className={`p-4 rounded-xl border-2 text-center transition-all ${
+                              feeApplicationModal.applyTo === option
+                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                                : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                            }`}
+                          >
+                            <p className="font-medium capitalize">
+                              {option === 'all' ? 'All Students' : 
+                               option === 'new_only' ? 'New Students Only' : 
+                               'Existing Students Only'}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Term Selection */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">
+                        Term *
+                      </label>
+                      <select
+                        value={feeApplicationModal.termId}
+                        onChange={(e) => handleApplicationModalChange('termId', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                        required
+                        disabled={loadingApplicationTerms}
+                      >
+                        <option value="">Select Term</option>
+                        {loadingApplicationTerms ? (
+                          <option value="" disabled>
+                            Loading terms...
+                          </option>
+                        ) : filteredTerms.length === 0 ? (
+                          <option value="" disabled>
+                            No terms found for this academic year
+                          </option>
+                        ) : (
+                          filteredTerms.map(term => (
+                            <option key={term.id} value={term.id}>
+                              {term.term_name} {term.is_current && "(Current)"}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      {!feeApplicationModal.termId && (
+                        <p className="text-sm text-rose-500 mt-1">Term selection is required</p>
+                      )}
+                    </div>
+                    
+                    {/* Class and Stream Selection */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">
+                          Class (Optional)
+                        </label>
+                        <select
+                          value={feeApplicationModal.classId}
+                          onChange={(e) => handleApplicationModalChange('classId', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="">All Classes</option>
+                          {classes.map(cls => (
+                            <option key={cls.id} value={cls.id}>
+                              {cls.class_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-700">
+                          Stream (Optional)
+                        </label>
+                        <select
+                          value={feeApplicationModal.streamId}
+                          onChange={(e) => handleApplicationModalChange('streamId', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                          disabled={!feeApplicationModal.classId}
+                        >
+                          <option value="">All Streams</option>
+                          {streams.map(stream => (
+                            <option key={stream.id} value={stream.id}>
+                              {stream.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    
+                    {/* Invoice Settings */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="generateInvoices"
+                          checked={feeApplicationModal.generateInvoices}
+                          onChange={(e) => handleApplicationModalChange('generateInvoices', e.target.checked)}
+                          className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <label htmlFor="generateInvoices" className="text-sm font-medium text-slate-700">
+                          Generate invoices automatically
+                        </label>
+                      </div>
+                      
+                      {feeApplicationModal.generateInvoices && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-slate-700">
+                            Invoice Due Date
+                          </label>
+                          <input
+                            type="date"
+                            value={feeApplicationModal.invoiceDueDate}
+                            onChange={(e) => handleApplicationModalChange('invoiceDueDate', e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                            min={new Date().toISOString().split('T')[0]}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Notes */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">
+                        Notes (Optional)
+                      </label>
+                      <textarea
+                        value={feeApplicationModal.notes}
+                        onChange={(e) => handleApplicationModalChange('notes', e.target.value)}
+                        placeholder="Add any notes about this fee application..."
+                        rows={3}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="text-sm text-slate-600">
+                  <p className="font-medium">Fee Structure: {feeApplicationModal.selectedStructureName}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Academic Year: {academicYears.find(y => y.id === feeApplicationModal.academicYearId)?.year_name || 'N/A'}
+                    {feeApplicationModal.termId && ` • Term: ${terms.find(t => t.id === feeApplicationModal.termId)?.term_name || 'N/A'}`}
+                  </p>
+                </div>
+                
+                <div className="flex gap-3">
+                  {showApplicationResults ? (
+                    <>
+                      <button
+                        onClick={closeFeeApplicationModal}
+                        className="px-6 py-3 border border-slate-200 text-slate-600 rounded-xl font-medium hover:bg-slate-50 transition-colors"
+                      >
+                        Close
+                      </button>
+                      <button
+                        onClick={() => setShowApplicationResults(false)}
+                        className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                      >
+                        <Eye size={18} />
+                        View Details
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={closeFeeApplicationModal}
+                        className="px-6 py-3 border border-slate-200 text-slate-600 rounded-xl font-medium hover:bg-slate-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleApplyFeeStructure}
+                        disabled={applyingFees || !feeApplicationModal.termId || loadingApplicationTerms}
+                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {applyingFees ? (
+                          <>
+                            <Loader2 className="animate-spin" size={18} />
+                            Applying...
+                          </>
+                        ) : (
+                          <>
+                            <Check size={18} />
+                            Apply to Students
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

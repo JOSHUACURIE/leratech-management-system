@@ -19,7 +19,8 @@ import {
   Eye,
   RefreshCw,
   Filter,
-  Info
+  Info,
+  UserCircle
 } from "lucide-react";
 import Card from "../../components/common/Card";
 import { financeAPI } from "../../services/api";
@@ -85,14 +86,15 @@ interface ReceiptData {
     description: string;
     amount: number;
   }>;
+  payerName: string;
 }
 
 interface PaymentFormData {
-  invoiceId?: string;
+  invoiceNumber?: string;
   studentId: string;
   amount: number;
   paymentMethod: string;
-  transactionId?: string;
+  transactionId: string;
   payerName: string;
   paymentReference: string;
 }
@@ -133,6 +135,8 @@ const RecordPayments: React.FC = () => {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("M-PESA");
   const [transactionId, setTransactionId] = useState("");
+  const [payerName, setPayerName] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [fetchingStreams, setFetchingStreams] = useState(false);
@@ -153,6 +157,14 @@ const RecordPayments: React.FC = () => {
     { value: "CHEQUE", label: "Cheque", icon: <FileText size={16} /> },
     { value: "BURSARY", label: "Bursary", icon: <Receipt size={16} /> },
   ];
+
+  // Generate payment reference
+  const generatePaymentReference = () => {
+    const date = new Date();
+    const timestamp = date.getTime().toString().slice(-6);
+    const random = Math.random().toString(36).substr(2, 4).toUpperCase();
+    return `PAY-${timestamp}-${random}`;
+  };
 
   // 1. Fetch Classes on Mount using Finance API
   useEffect(() => {
@@ -175,6 +187,18 @@ const RecordPayments: React.FC = () => {
     };
     loadInitialData();
   }, []);
+
+  // Initialize payment reference
+  useEffect(() => {
+    setPaymentReference(generatePaymentReference());
+  }, []);
+
+  // Auto-fill payer name when student is selected
+  useEffect(() => {
+    if (selectedStudent && !payerName) {
+      setPayerName(`${selectedStudent.first_name} ${selectedStudent.last_name}`);
+    }
+  }, [selectedStudent, payerName]);
 
   // 2. Fetch Streams when Class changes using Finance API
   useEffect(() => {
@@ -371,6 +395,12 @@ const RecordPayments: React.FC = () => {
               }]
             }));
           setStudentInvoices(pendingInvoices);
+          
+          // Auto-select the first invoice if there's only one
+          if (pendingInvoices.length === 1) {
+            setSelectedInvoice(pendingInvoices[0]);
+            setAmount(pendingInvoices[0].balance.toString());
+          }
         } else {
           console.error("Failed to fetch student invoices:", response.data);
           setStudentInvoices([]);
@@ -410,6 +440,12 @@ const RecordPayments: React.FC = () => {
               }]
             }));
           setStudentInvoices(pendingInvoices);
+          
+          // Auto-select the first invoice if there's only one
+          if (pendingInvoices.length === 1) {
+            setSelectedInvoice(pendingInvoices[0]);
+            setAmount(pendingInvoices[0].balance.toString());
+          }
         }
       }
     } catch (err: any) {
@@ -423,6 +459,10 @@ const RecordPayments: React.FC = () => {
   const handleStudentSelect = (student: Student) => {
     setSelectedStudent(student);
     setSearchQuery("");
+    // Auto-fill payer name with student name
+    if (!payerName) {
+      setPayerName(`${student.first_name} ${student.last_name}`);
+    }
     // Load student fee details from finance API
     loadStudentFeeDetails(student.id);
     // Auto-focus amount input
@@ -455,11 +495,33 @@ const RecordPayments: React.FC = () => {
       return false;
     }
     
-    if (method === "M-PESA" && !transactionId.trim()) {
-      setError("Please enter M-Pesa transaction ID");
+    // Transaction ID is required for all payment methods
+    if (!transactionId.trim()) {
+      setError(getTransactionIdLabel() + " is required");
       return false;
     }
     
+    if (!payerName.trim()) {
+      setError("Please enter payer's name");
+      return false;
+    }
+    
+    // Check if an invoice is selected
+    if (!selectedInvoice) {
+      // Allow payment without invoice selection but show warning
+      if (studentInvoices.length > 0) {
+        setError("Please select an invoice to apply payment to. If you want to make a general payment, select 'No specific invoice'");
+        return false;
+      }
+    }
+    
+    // If invoice is selected, validate amount doesn't exceed invoice balance
+    if (selectedInvoice && amountNum > selectedInvoice.balance) {
+      setError(`Payment amount (KES ${amountNum.toLocaleString()}) exceeds selected invoice balance (KES ${selectedInvoice.balance.toLocaleString()})`);
+      return false;
+    }
+    
+    // Validate against total outstanding balance
     const totalBalance = getTotalBalance();
     if (amountNum > totalBalance) {
       setError(`Amount cannot exceed total outstanding balance of KES ${totalBalance.toLocaleString()}`);
@@ -467,6 +529,28 @@ const RecordPayments: React.FC = () => {
     }
     
     return true;
+  };
+
+  const getTransactionIdLabel = () => {
+    switch (method) {
+      case "M-PESA": return "M-Pesa Transaction ID";
+      case "CASH": return "Cash Receipt Number";
+      case "CARD": return "Card Transaction ID";
+      case "BANK_TRANSFER": return "Bank Transaction ID";
+      case "CHEQUE": return "Cheque Number";
+      default: return "Transaction/Reference ID";
+    }
+  };
+
+  const getTransactionIdPlaceholder = () => {
+    switch (method) {
+      case "M-PESA": return "Enter M-Pesa transaction ID (e.g., OAT8X4HABC)";
+      case "CASH": return "Enter cash receipt number";
+      case "CARD": return "Enter card transaction ID";
+      case "BANK_TRANSFER": return "Enter bank transaction reference";
+      case "CHEQUE": return "Enter cheque number";
+      default: return "Enter transaction/reference ID";
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -480,14 +564,16 @@ const RecordPayments: React.FC = () => {
       setSuccess(null);
       
       const paymentData: PaymentFormData = {
-        invoiceId: selectedInvoice?.id || undefined,
+        invoiceNumber: selectedInvoice?.invoice_number,  // Send invoice number
         studentId: selectedStudent?.id || "",
-        amount: Number(amount),
+        amount: parseFloat(amount),
         paymentMethod: method,
-        transactionId: method === "M-PESA" ? transactionId : undefined,
-        payerName: `${selectedStudent?.first_name} ${selectedStudent?.last_name}`,
-        paymentReference: `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`
+        transactionId: transactionId,
+        payerName: payerName.trim(),
+        paymentReference: paymentReference || generatePaymentReference()
       };
+      
+      console.log("Sending payment data:", paymentData);
       
       const response = await financeAPI.processPayment(paymentData);
       
@@ -504,14 +590,15 @@ const RecordPayments: React.FC = () => {
           admissionNo: selectedStudent?.admission_number || "",
           className: classes.find(c => c.id === selectedStudent?.class_id)?.class_name || "N/A",
           paymentMethod: method,
-          transactionId: method === "M-PESA" ? transactionId : undefined,
+          transactionId: transactionId,
           amount: Number(amount),
           previousBalance: selectedInvoice?.balance || getTotalBalance(),
           newBalance: updatedInvoice?.balance || (getTotalBalance() - Number(amount)),
           items: studentInvoices.map(inv => ({
             description: `Invoice: ${inv.invoice_number}`,
             amount: inv.balance
-          }))
+          })),
+          payerName: payerName
         };
         
         setReceiptData(receipt);
@@ -538,6 +625,8 @@ const RecordPayments: React.FC = () => {
     setSelectedStudent(null);
     setAmount("");
     setTransactionId("");
+    setPayerName("");
+    setPaymentReference(generatePaymentReference());
     setSelectedInvoice(null);
     setStudentInvoices([]);
     setSearchQuery("");
@@ -553,6 +642,10 @@ const RecordPayments: React.FC = () => {
     setFilteredStudents([]);
     setError(null);
     setSuccess(null);
+  };
+
+  const handleRegenerateReference = () => {
+    setPaymentReference(generatePaymentReference());
   };
 
   const generateReceiptPDF = async () => {
@@ -650,6 +743,12 @@ const RecordPayments: React.FC = () => {
   // Get school name safely
   const getSchoolName = () => {
     return user?.school?.name || "SCHOOL NAME";
+  };
+
+  // Handle clear invoice selection
+  const handleClearInvoiceSelection = () => {
+    setSelectedInvoice(null);
+    setAmount("");
   };
 
   return (
@@ -912,36 +1011,84 @@ const RecordPayments: React.FC = () => {
                   </div>
                   
                   {studentInvoices.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {studentInvoices.map(invoice => (
-                        <button
-                          key={invoice.id}
-                          type="button"
-                          onClick={() => handleInvoiceSelect(invoice)}
-                          className={`p-4 rounded-2xl text-left transition-all ${
-                            selectedInvoice?.id === invoice.id 
-                              ? 'bg-indigo-600 text-white' 
-                              : 'bg-slate-50 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-bold">{invoice.invoice_number}</p>
-                              <p className="text-sm opacity-75">
-                                Due: {new Date(invoice.due_date).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <p className={`font-black ${selectedInvoice?.id === invoice.id ? 'text-white' : 'text-indigo-600'}`}>
-                              KES {invoice.balance.toLocaleString()}
+                    <div className="space-y-3">
+                      {/* "No specific invoice" option */}
+                      <button
+                        type="button"
+                        onClick={handleClearInvoiceSelection}
+                        className={`w-full p-4 rounded-2xl text-left transition-all border-2 ${
+                          !selectedInvoice 
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-600' 
+                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-bold">No specific invoice</p>
+                            <p className="text-sm opacity-75">
+                              Record as general payment (will be applied to oldest invoice)
                             </p>
                           </div>
-                        </button>
-                      ))}
+                          {!selectedInvoice && (
+                            <CheckCircle2 size={20} className="text-indigo-600" />
+                          )}
+                        </div>
+                      </button>
+                      
+                      {/* Invoice list */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {studentInvoices.map(invoice => (
+                          <button
+                            key={invoice.id}
+                            type="button"
+                            onClick={() => handleInvoiceSelect(invoice)}
+                            className={`p-4 rounded-2xl text-left transition-all border-2 ${
+                              selectedInvoice?.id === invoice.id 
+                                ? 'border-indigo-600 bg-indigo-600 text-white' 
+                                : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="font-bold">{invoice.invoice_number}</p>
+                                <p className="text-sm opacity-75">
+                                  Due: {new Date(invoice.due_date).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <p className={`font-black ${selectedInvoice?.id === invoice.id ? 'text-white' : 'text-indigo-600'}`}>
+                                KES {invoice.balance.toLocaleString()}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div className="p-4 bg-slate-50 rounded-2xl text-center">
                       <p className="text-slate-500 text-sm">No outstanding invoices found</p>
-                      <p className="text-slate-400 text-xs mt-1">You can still record a general payment</p>
+                      <p className="text-slate-400 text-xs mt-1">Payment will be recorded as general payment</p>
+                    </div>
+                  )}
+                  
+                  {/* Selected Invoice Info */}
+                  {selectedInvoice && (
+                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-emerald-800">Selected Invoice</p>
+                          <p className="text-sm text-emerald-600">{selectedInvoice.invoice_number}</p>
+                          <p className="text-xs text-emerald-500">
+                            Balance: KES {selectedInvoice.balance.toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleClearInvoiceSelection}
+                          className="text-emerald-600 hover:text-emerald-800"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -953,6 +1100,26 @@ const RecordPayments: React.FC = () => {
               {selectedStudent && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Payer Name */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1">
+                        <UserCircle size={12} />
+                        Payer Name *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Enter payer's name"
+                        value={payerName}
+                        onChange={(e) => setPayerName(e.target.value)}
+                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                        disabled={loading}
+                        required
+                      />
+                      <p className="text-xs text-slate-500 ml-1">
+                        Person making the payment (parent, guardian, etc.)
+                      </p>
+                    </div>
+                    
                     {/* Amount */}
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
@@ -973,59 +1140,90 @@ const RecordPayments: React.FC = () => {
                           disabled={loading}
                         />
                       </div>
-                    </div>
-
-                    {/* Payment Method */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                        Payment Method *
-                      </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {paymentMethods.map((methodOption) => (
-                          <button
-                            key={methodOption.value}
-                            type="button"
-                            onClick={() => {
-                              setMethod(methodOption.value);
-                              if (methodOption.value !== "M-PESA") {
-                                setTransactionId("");
-                              }
-                            }}
-                            className={`py-3 rounded-2xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                              method === methodOption.value 
-                                ? 'bg-slate-900 text-white shadow-lg' 
-                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                            disabled={loading}
-                          >
-                            {methodOption.icon}
-                            {methodOption.label}
-                          </button>
-                        ))}
-                      </div>
+                      {selectedInvoice && (
+                        <p className="text-xs text-slate-500 ml-1">
+                          Invoice balance: KES {selectedInvoice.balance.toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Transaction ID for M-PESA */}
-                  {method === "M-PESA" && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                        M-Pesa Transaction ID *
-                      </label>
+                  {/* Payment Method */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Payment Method *
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {paymentMethods.map((methodOption) => (
+                        <button
+                          key={methodOption.value}
+                          type="button"
+                          onClick={() => {
+                            setMethod(methodOption.value);
+                            // Clear transaction ID when method changes
+                            setTransactionId("");
+                          }}
+                          className={`py-3 rounded-2xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                            method === methodOption.value 
+                              ? 'bg-slate-900 text-white shadow-lg' 
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                          disabled={loading}
+                        >
+                          {methodOption.icon}
+                          {methodOption.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Transaction ID for all methods */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      {getTransactionIdLabel()} *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={getTransactionIdPlaceholder()}
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value.toUpperCase())}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+
+                  {/* Payment Reference */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Payment Reference
+                    </label>
+                    <div className="flex gap-3">
                       <input
                         type="text"
-                        placeholder="Enter transaction ID (e.g., OAT8X4HABC)"
-                        value={transactionId}
-                        onChange={(e) => setTransactionId(e.target.value.toUpperCase())}
-                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Payment reference"
+                        value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value)}
+                        className="w-full bg-slate-50 border-none rounded-2xl p-4 font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 font-mono"
                         disabled={loading}
                       />
+                      <button
+                        type="button"
+                        onClick={handleRegenerateReference}
+                        className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-2xl transition-colors whitespace-nowrap"
+                        disabled={loading}
+                      >
+                        Regenerate
+                      </button>
                     </div>
-                  )}
+                    <p className="text-xs text-slate-500 ml-1">
+                      Auto-generated reference. You can customize it or regenerate.
+                    </p>
+                  </div>
 
                   <button 
                     type="submit"
-                    disabled={loading || !selectedStudent || !amount || Number(amount) <= 0}
+                    disabled={loading || !selectedStudent || !amount || Number(amount) <= 0 || !payerName || !transactionId}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-xl shadow-indigo-200 flex items-center justify-center gap-3 transition-all disabled:bg-slate-200 disabled:shadow-none disabled:cursor-not-allowed disabled:text-slate-400"
                   >
                     {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
@@ -1088,6 +1286,29 @@ const RecordPayments: React.FC = () => {
                 </span>
               </div>
               
+              <div className="flex justify-between items-center py-3 border-b border-slate-700">
+                <span className="text-slate-300 text-sm">Payer Name</span>
+                <span className="font-bold text-right">
+                  {payerName || "—"}
+                </span>
+              </div>
+              
+              <div className="flex justify-between items-center py-3 border-b border-slate-700">
+                <span className="text-slate-300 text-sm">Payment Method</span>
+                <span className="font-bold text-right">
+                  {method ? paymentMethods.find(m => m.value === method)?.label : "—"}
+                </span>
+              </div>
+              
+              <div className="flex justify-between items-center py-3 border-b border-slate-700">
+                <span className="text-slate-300 text-sm">Invoice Applied</span>
+                <span className="font-bold text-right">
+                  {selectedInvoice 
+                    ? selectedInvoice.invoice_number 
+                    : studentInvoices.length > 0 ? "Auto-apply to oldest" : "General payment"}
+                </span>
+              </div>
+              
               <div className="flex justify-between items-center py-3">
                 <span className="text-slate-300 text-sm">New Balance</span>
                 <span className="font-bold text-white">
@@ -1129,7 +1350,7 @@ const RecordPayments: React.FC = () => {
                   <span className="text-indigo-600 font-bold text-xs">2</span>
                 </div>
                 <p className="text-sm text-slate-600">
-                  Choose an invoice (optional) or enter payment amount
+                  <strong>Important:</strong> Select an invoice or choose "No specific invoice"
                 </p>
               </div>
               
@@ -1137,9 +1358,14 @@ const RecordPayments: React.FC = () => {
                 <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center shrink-0">
                   <span className="text-indigo-600 font-bold text-xs">3</span>
                 </div>
-                <p className="text-sm text-slate-600">
-                  Select payment method and provide required details
-                </p>
+                <div>
+                  <p className="text-sm text-slate-600">
+                    Enter <span className="font-bold">payer name</span> and select payment method
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Transaction ID is required for all payment methods
+                  </p>
+                </div>
               </div>
               
               <div className="flex items-start gap-3">
@@ -1170,6 +1396,14 @@ const RecordPayments: React.FC = () => {
                   {user?.name || "System User"}
                 </span>
               </div>
+              {paymentReference && (
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Payment Reference</span>
+                  <span className="font-bold text-slate-700 font-mono text-xs">
+                    {paymentReference}
+                  </span>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -1290,6 +1524,16 @@ const RecordPayments: React.FC = () => {
 
                   {/* Right Column */}
                   <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                        Payer Information
+                      </p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <UserCircle size={18} className="text-slate-500" />
+                        <p className="font-bold text-slate-800">{receiptData.payerName}</p>
+                      </div>
+                    </div>
+                    
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
                         Payment Method

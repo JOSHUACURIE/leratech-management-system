@@ -77,7 +77,6 @@ api.interceptors.response.use(
   }
 );
 
-// ==================== AUTH API ====================
 export const authAPI = {
   login: (email: string, password: string, slug: string) =>
     api.post('/auth/login', { email, password, slug }),
@@ -1039,6 +1038,114 @@ export interface ClearanceListResponse {
   };
 }
 
+
+export type RefundRequestStatus = 'pending' | 'approved' | 'completed' | 'rejected';
+
+export type RefundPaymentMethod = 'M-Pesa' | 'Bank Transfer' | 'Credit Note' | 'Cash' | 'Cheque';
+export interface CreateRefundRequestData {
+  studentId: string;
+  invoiceId?: string;
+  amount: number;
+  reason: string;
+  paymentMethod: RefundPaymentMethod;
+  bankDetails?: {
+    accountName: string;
+    accountNumber: string;
+    bankName: string;
+    branch?: string;
+  };
+  mpesaNumber?: string;
+  notes?: string;
+}
+
+export interface RefundRequest {
+  id: string;
+  refund_reference: string;
+  student: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    admission_number: string;
+    class?: {
+      class_name: string;
+    };
+  };
+  invoice?: {
+    id: string;
+    invoice_number: string;
+    total_amount: number;
+  };
+  amount: number;
+  reason: string;
+  payment_method: RefundPaymentMethod;
+  bank_details?: any;
+  mpesa_number?: string;
+  status: RefundRequestStatus;
+  requested_by: string;
+  requested_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  processed_by?: string;
+  processed_at?: string;
+  rejected_by?: string;
+  rejected_at?: string;
+  rejection_reason?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RefundSummary {
+  totals: {
+    all_time: number;
+    pending: number;
+    approved: number;
+    completed: number;
+    rejected: number;
+  };
+  counts: {
+    pending: number;
+    approved: number;
+    completed: number;
+    rejected: number;
+  };
+  payment_methods: Record<string, {
+    total_amount: number;
+    count: number;
+  }>;
+  recent_refunds: RefundRequest[];
+  monthly_trend: Array<{
+    month: string;
+    total_amount: number;
+    count: number;
+    completed_amount: number;
+  }>;
+}
+
+export interface BulkRefundUpdateData {
+  refundIds: string[];
+  action: 'approve' | 'reject' | 'process';
+  notes?: string;
+  transactionReference?: string;
+  paymentDate?: string;
+}
+
+export interface ProcessRefundData {
+  transactionReference?: string;
+  paymentDate?: string;
+  notes?: string;
+  bankReceiptNumber?: string;
+  mpesaConfirmationCode?: string;
+}
+
+export interface ApproveRefundData {
+  notes?: string;
+}
+
+export interface RejectRefundData {
+  rejectionReason: string;
+}
+
 export const financeAPI={
 
   getDashboardSummary: () => 
@@ -1055,7 +1162,7 @@ export const financeAPI={
   }) => api.get('/admin/finance/dashboard/ledger', { params }),
 
   getClassWiseSummary: () => 
-    api.get('/admin/dashboard/finance/class-summary'),
+    api.get('/admin/finance/dashboard/class-summary'),
 
 
   getRecentActivities: (params?: {
@@ -1087,13 +1194,28 @@ export const financeAPI={
     api.get(`/admin/finance/payments/${paymentId}`),
 
 
-  getFeeWaivers: (params?: {
-    studentId?: string;
-    status?: string;
-    page?: number;
-    limit?: number;
-  }) => api.get('/admin/finance/waivers', { params }),
+getFeeWaivers: (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  category?: string;
+  status?: string;
+}) => api.get('/finance/waivers', { params }),
 
+getWaiverSummary: () => 
+  api.get('/finance/waivers/summary'),
+
+createWaiverType: (data: {
+  waiver_name: string;
+  waiver_type: string;
+  category: string;
+  waiver_amount?: number;
+  percentage?: number;
+  description?: string;
+  max_applications?: number;
+  valid_from: string;
+  valid_to: string;
+}) => api.post('/finance/waiver-types', data),
 
   getFeeStructure: (params?: {
     classId?: string;
@@ -1105,7 +1227,7 @@ export const financeAPI={
     startDate: string;
     endDate: string;
     paymentMethod?: string;
-  }) => api.get('/admin/finance/reconciliation', { params }),
+  }) => api.get('/recon', { params }),
 
 
   exportFinanceReport: (params: {
@@ -1152,11 +1274,17 @@ generateClassInvoices: (data: InvoiceGenerationData) =>
     api.post('/finance/payroll/config', data),
        processPayroll: (data: PayrollData) =>
     api.post('/finance/payroll/process', data),
-         getDebtorsReport: (params?: {
-    classId?: string;
-    page?: number;
-    limit?: number;
-  }) => api.get('/finance/reports/debtors', { params }),
+        getDebtorsReport: (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  minBalance?: number;
+  classId?: string;
+  riskLevel?: string;
+  agingBucket?: string;
+}) => api.get('/finance/reports/debtors', { params }),
+  getArrearsSummary: () => 
+  api.get('/finance/reports/arrears-summary'),
     generateMonthlyReport: (params: {
     month: number;
     year: number;
@@ -1191,10 +1319,10 @@ generateClassInvoices: (data: InvoiceGenerationData) =>
        generateReceipt: (paymentId: string, format?: 'html') =>
     api.get(`/finance/receipt/${paymentId}${format === 'html' ? '?format=html' : ''}`),
 
-        downloadReceiptPDF: (paymentId: string) =>
-    api.get(`/finance/receipt/${paymentId}/pdf`, { 
-      responseType: 'blob' 
-    }),
+  downloadReceiptPDF: (paymentId: string) =>
+  api.get(`/finance/receipts/${paymentId}/pdf`, { 
+    responseType: 'blob' 
+  }),
       getStudentsForMigration: (params?: {
     classId?: string;
     streamId?: string;
@@ -1215,8 +1343,11 @@ generateClassInvoices: (data: InvoiceGenerationData) =>
    getExpenseCategories: () =>
     api.get('/finance/config/expense-categories'),
 
-     getWaiverTypes: () =>
-    api.get('/finance/config/waiver-types'),
+getWaiverTypes: (params?: {
+  activeOnly?: boolean;
+  category?: string;
+}) => api.get('/finance/waiver-types', { params }),
+
 
        bulkProcessPayments: (payments: PaymentData[]) =>
     api.post('/finance/payments/bulk', { payments }),
@@ -1225,16 +1356,15 @@ generateClassInvoices: (data: InvoiceGenerationData) =>
     api.post('/finance/waivers/bulk', { waivers }),
           bulkGenerateReceipts: (paymentIds: string[]) =>
     api.post('/finance/receipts/bulk', { paymentIds }),
-
-           exportFinancialReport: (params: {
-    reportType: 'ledger' | 'summary' | 'debtors' | 'trend' | 'clearance' | 'sponsorship';
-    format: 'excel' | 'pdf' | 'csv';
-    filters?: any;
-  }) => api.get('/finance/reports/export', { 
-    params,
-    responseType: 'blob'
-  }),
-
+          
+exportFinancialReport: (params: {
+  reportType: 'payments' | 'ledger' | 'summary' | 'debtors' | 'trend' | 'clearance' | 'sponsorship';
+  format: 'excel' | 'pdf' | 'csv';
+  filters?: any;
+}) => api.get('/finance/reports/export', { 
+  params,
+  responseType: 'blob'
+}),
 
   getClasses: (params?: {
   search?: string;
@@ -1396,16 +1526,12 @@ transferStudentsBetweenStreams: (data: {
   effectiveDate?: string;
 }) => api.post('/finance/students/transfer-streams', data),
 
-// Mass Communication
 sendFeeReminders: (data: {
-  classId?: string;
-  streamId?: string;
-  studentIds?: string[];
+  studentIds: string[];
   reminderType: 'overdue' | 'upcoming' | 'partial';
   channel: 'sms' | 'email' | 'both';
   message?: string;
 }) => api.post('/finance/communications/send-reminders', data),
-
 
 applyFeeStructureToStudents: (data: {
   feeStructureId: string;
@@ -1421,7 +1547,7 @@ applyFeeStructureToStudents: (data: {
     dueDates?: string[];
   };
   notes?: string;
-}) => api.post('/finance/fee-application/apply', data),
+}) => api.post('/fee-application/apply', data),
 
 bulkAssignFeeStructures: (data: {
   assignments: Array<{
@@ -1432,17 +1558,17 @@ bulkAssignFeeStructures: (data: {
   }>;
   generateInvoices?: boolean;
   notes?: string;
-}) => api.post('/finance/fee-application/bulk-assign', data),
+}) => api.post('/fee-application/bulk-assign', data),
 
 getStudentFeeAssignments: (studentId: string) =>
-  api.get(`/finance/fee-application/student/${studentId}/assignments`),
+  api.get(`/fee-application/student/${studentId}/assignments`),
 
 updateFeeAssignment: (assignmentId: string, data: {
   feeStructureId?: string;
   applicableStudentType?: string;
   notes?: string;
   isActive?: boolean;
-}) => api.put(`/finance/fee-application/assignments/${assignmentId}`, data),
+}) => api.put(`/fee-application/assignments/${assignmentId}`, data),
 
 generateInvoicesForAssignments: (data: {
   assignmentIds: string[];
@@ -1452,7 +1578,231 @@ generateInvoicesForAssignments: (data: {
     dueDates?: string[];
   };
   notes?: string;
-}) => api.post('/finance/fee-application/generate-invoices', data),
+}) => api.post('/fee-application/generate-invoices', data),
+
+//invoices
+getInvoices: (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  classId?: string;
+  status?: string;
+}) => api.get('/finance/invoices', { params }),
+
+getInvoiceSummary: () => 
+  api.get('/finance/invoices/summary'),
+
+getPaymentHistory: (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  method?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}) => api.get('/finance/payments', { params }),
+getPaymentSummary: () => 
+  api.get('/finance/payments/summary'),
+
+  // Refund Management APIs
+  createRefundRequest: (data: CreateRefundRequestData) =>
+    api.post('/finance/refunds', data),
+getRefundRequests: (params?: {
+  page?: number;
+  limit?: number;
+  status?: RefundRequestStatus | 'all';
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  paymentMethod?: RefundPaymentMethod | 'all';
+}) => api.get('/finance/refunds', { params }),
+  getRefundRequestById: (refundId: string) =>
+    api.get(`/finance/refunds/${refundId}`),
+
+  approveRefundRequest: (refundId: string, data?: ApproveRefundData) =>
+    api.put(`/finance/refunds/${refundId}/approve`, data),
+
+  processRefund: (refundId: string, data?: ProcessRefundData) =>
+    api.put(`/finance/refunds/${refundId}/process`, data),
+
+  rejectRefundRequest: (refundId: string, data: RejectRefundData) =>
+    api.put(`/finance/refunds/${refundId}/reject`, data),
+
+  getRefundSummary: () =>
+    api.get('/admin/finance/refunds/summary'),
+
+  getStudentRefunds: (studentId: string) =>
+    api.get(`/finance/students/${studentId}/refunds`),
+
+  bulkUpdateRefundStatus: (data: BulkRefundUpdateData) =>
+    api.put('/finance/refunds/bulk-update', data),
+
+  generateRefundReport: (params?: {
+    format?: 'json' | 'csv';
+    startDate?: string;
+    endDate?: string;
+    status?: RefundRequestStatus | 'all';
+  }) => api.get('/finance/refunds/report', { params }),
+
+  // You can also add these convenience methods:
+  exportRefundReport: (params: {
+    format: 'excel' | 'csv' | 'pdf';
+    startDate?: string;
+    endDate?: string;
+    status?: RefundRequestStatus | 'all';
+  }) => api.get('/finance/refunds/export', {
+    params,
+    responseType: 'blob'
+  }),
+
+  // Add these refund-related utilities if needed:
+  validateRefundAmount: (studentId: string, invoiceId?: string) =>
+    api.get('/finance/refunds/validate', {
+      params: { studentId, invoiceId }
+    }),
+
+  getRefundableStudents: (params?: {
+    search?: string;
+    classId?: string;
+    minCreditBalance?: number;
+    page?: number;
+    limit?: number;
+  }) => api.get('/finance/refunds/eligible-students', { params }),
+
+  // RECONCILIATION APIS
+  // ===================
+
+  /**
+   * Get unreconciled transactions with filters
+   */
+  getUnreconciledTransactions: (params?: {
+    source?: 'M-Pesa' | 'Bank' | 'all';
+    status?: 'all' | 'unmatched' | 'matched' | 'pending' | 'disputed';
+    start_date?: string;
+    end_date?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/recon/pending', { params }),
+
+  /**
+   * Get reconciliation statistics
+   */
+  getReconciliationStats: (params?: {
+    start_date?: string;
+    end_date?: string;
+  }) => api.get('/recon/stats', { params }),
+
+  /**
+   * Match transaction to student
+   */
+  reconcileTransaction: (data: {
+    transaction_ids: string[];
+    student_id: string;
+    notes?: string;
+    verified_by?: string;
+  }) => api.post('/recon/match', data),
+
+  /**
+   * Mark transaction as disputed
+   */
+  disputeTransaction: (data: {
+    transaction_id: string;
+    reason: string;
+  }) => api.post('/recon/dispute', data),
+
+  /**
+   * Get reconciliation audit log
+   */
+  getReconciliationAudit: (params?: {
+    start_date?: string;
+    end_date?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/recon/audit', { params }),
+
+  /**
+   * Export reconciliation report
+   */
+  exportReconciliationReport: (params: {
+    start_date?: string;
+    end_date?: string;
+    format?: 'csv' | 'excel' | 'pdf';
+    status?: 'all' | 'unmatched' | 'matched' | 'disputed';
+    source?: 'all' | 'M-Pesa' | 'Bank';
+  }) => api.get('/recon/export', { 
+    params,
+    responseType: 'blob' 
+  }),
+
+  /**
+   * Sync external transactions from M-Pesa/Bank APIs
+   */
+  syncExternalTransactions: (data: {
+    source: 'M-Pesa' | 'Bank';
+    transactions: Array<{
+      reference: string;
+      amount: number;
+      sender_name?: string;
+      sender_account?: string;
+      transaction_date?: string;
+      status?: string;
+      raw_data?: any;
+    }>;
+  }) => api.post('/recon/sync', data),
+
+  /**
+   * Get transaction by ID
+   */
+  getTransactionById: (transactionId: string) =>
+    api.get(`/recon/transactions/${transactionId}`),
+
+  /**
+   * Update transaction notes
+   */
+  updateTransactionNotes: (transactionId: string, data: {
+    notes: string;
+  }) => api.put(`/recon/transactions/${transactionId}/notes`, data),
+
+  /**
+   * Get reconciliation dashboard summary
+   */
+  getReconciliationDashboard: () =>
+    api.get('/recon/dashboard'),
+
+  /**
+   * Bulk reconcile transactions
+   */
+  bulkReconcileTransactions: (data: {
+    matches: Array<{
+      transaction_id: string;
+      student_id: string;
+      notes?: string;
+    }>;
+    verified_by?: string;
+  }) => api.post('/recon/bulk-match', data),
+
+  /**
+   * Get reconciliation suggestions (auto-match)
+   */
+  getReconciliationSuggestions: (params?: {
+    threshold?: number;
+    days?: number;
+    limit?: number;
+  }) => api.get('/recon/suggestions', { params }),
+
+  /**
+   * Auto-reconcile based on rules
+   */
+  autoReconcile: (data?: {
+    rules?: Array<{
+      field: 'sender_name' | 'sender_account' | 'amount' | 'date';
+      operator: 'equals' | 'contains' | 'range';
+      value: any;
+    }>;
+    dry_run?: boolean;
+  }) => api.post('/recon/auto', data),
+
 }
 
 
