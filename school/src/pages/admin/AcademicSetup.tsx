@@ -4,7 +4,7 @@ import {
   Percent, Trash2, Loader2, X, AlertCircle, Edit3, Save,
   ChevronDown, Clock, Calendar as CalendarIcon, Grid, Star, Award,
   FileText, Hash, Type, Filter, CheckCircle, AlertTriangle, Copy,
-  ChevronRight, ChevronLeft, Book, Tag, Target, BarChart, 
+  ChevronRight, ChevronLeft, Book, Tag, Target, BarChart, BarChart3,
   TrendingUp, Users, School, BookMarked, ClipboardCheck, 
   FolderTree, List, Grid3x3, Table, Eye, EyeOff, Download,
   Upload, Share2, Lock, Unlock, RefreshCw, Zap, Layers3,
@@ -441,41 +441,30 @@ const fetchAcademicData = async () => {
     // Handle grading systems with specific unwrapping
     const gradingResponse = responses[5];
     let gradingSystemsData: GradingSystem[] = [];
-    
-    if (gradingResponse.status === 'fulfilled') {
-      const responseData = gradingResponse.value.data;
-      
-      // Debug: log the actual response structure
-      console.log('Grading systems response:', responseData);
-      
-      // Handle different response structures
-      if (Array.isArray(responseData)) {
-        gradingSystemsData = responseData;
-      } else if (responseData && Array.isArray(responseData.data)) {
-        gradingSystemsData = responseData.data;
-      } else if (responseData && typeof responseData === 'object') {
-        // Try to find array in common property names
-        const possibleArrayKeys = ['gradingSystems', 'systems', 'results', 'items', 'list'];
-        for (const key of possibleArrayKeys) {
-          if (Array.isArray(responseData[key])) {
-            gradingSystemsData = responseData[key];
-            break;
-          }
-        }
-        
-        // If still not found, check if responseData itself has grading system properties
-        if (gradingSystemsData.length === 0 && responseData.id) {
-          // Might be a single object instead of array
-          gradingSystemsData = [responseData];
-        }
-      }
-      
-      console.log('Processed grading systems:', gradingSystemsData);
-    } else {
-      console.error('Error fetching grading systems:', gradingResponse.reason);
-    }
-    
-    setGradingSystems(gradingSystemsData);
+
+if (gradingResponse.status === 'fulfilled') {
+  const responseData = gradingResponse.value.data;
+  
+  console.log('Grading systems response:', responseData);
+  
+  // Based on your API response, it should be:
+  // responseData.systems.subject contains the array of grading systems
+  if (responseData?.systems?.subject && Array.isArray(responseData.systems.subject)) {
+    gradingSystemsData = responseData.systems.subject;
+    console.log('Found grading systems in systems.subject:', gradingSystemsData.length);
+  } 
+  else if (responseData?.raw && Array.isArray(responseData.raw)) {
+    gradingSystemsData = responseData.raw;
+    console.log('Found grading systems in raw:', gradingSystemsData.length);
+  }
+  else if (Array.isArray(responseData)) {
+    gradingSystemsData = responseData;
+  }
+  
+  console.log('Processed grading systems:', gradingSystemsData);
+}
+
+setGradingSystems(gradingSystemsData)
 
     if (activeTab === 'cbc') {
       setCBCStrands(unwrap<CBCStrand>(responses[6], 6));
@@ -1158,9 +1147,9 @@ const toggleSection = (section: string) => {
                 <div className="space-y-4">
                   {/* Classes Section */}
                   <Card className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                    <button 
+                    <div 
                       onClick={() => toggleSection('classes')}
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <GraduationCap className="text-indigo-600" size={24} />
@@ -1171,7 +1160,7 @@ const toggleSection = (section: string) => {
                       </div>
                       <div className="flex items-center gap-2">
                         <ChevronDown className={`transition-transform ${expandedSections.classes ? 'rotate-180' : ''}`} />
-                        <button 
+                        <div 
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowModal('Class');
@@ -1179,9 +1168,9 @@ const toggleSection = (section: string) => {
                           className="p-2 hover:bg-indigo-50 rounded-lg"
                         >
                           <Plus size={18} className="text-indigo-600" />
-                        </button>
+                        </div>
                       </div>
-                    </button>
+                    </div>
                     
                     {expandedSections.classes && (
                       <div className="p-4 pt-0">
@@ -1220,9 +1209,9 @@ const toggleSection = (section: string) => {
 
                   {/* Streams Section */}
                   <Card className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                    <button 
+                    <div 
                       onClick={() => toggleSection('streams')}
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <Layers className="text-emerald-600" size={24} />
@@ -1233,7 +1222,7 @@ const toggleSection = (section: string) => {
                       </div>
                       <div className="flex items-center gap-2">
                         <ChevronDown className={`transition-transform ${expandedSections.streams ? 'rotate-180' : ''}`} />
-                        <button 
+                        <div 
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowModal('Stream');
@@ -1241,9 +1230,9 @@ const toggleSection = (section: string) => {
                           className="p-2 hover:bg-emerald-50 rounded-lg"
                         >
                           <Plus size={18} className="text-emerald-600" />
-                        </button>
+                        </div>
                       </div>
-                    </button>
+                    </div>
                     
                     {expandedSections.streams && (
                       <div className="p-4 pt-0">
@@ -1279,9 +1268,9 @@ const toggleSection = (section: string) => {
 
                   {/* Subjects Section */}
                   <Card className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                    <button 
+                    <div 
                       onClick={() => toggleSection('subjects')}
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <BookOpen className="text-amber-600" size={24} />
@@ -1303,7 +1292,7 @@ const toggleSection = (section: string) => {
                         </select>
                         <div className="flex items-center gap-2">
                           <ChevronDown className={`transition-transform ${expandedSections.subjects ? 'rotate-180' : ''}`} />
-                          <button 
+                          <div 
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowModal('Subject');
@@ -1311,10 +1300,10 @@ const toggleSection = (section: string) => {
                             className="p-2 hover:bg-amber-50 rounded-lg"
                           >
                             <Plus size={18} className="text-amber-600" />
-                          </button>
+                          </div>
                         </div>
                       </div>
-                    </button>
+                    </div>
                     
                     {expandedSections.subjects && (
                       <div className="p-4 pt-0">
@@ -1369,9 +1358,9 @@ const toggleSection = (section: string) => {
 
                   {/* Academic Years Section */}
                   <Card className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                    <button 
+                    <div 
                       onClick={() => toggleSection('years')}
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <CalendarIcon className="text-violet-600" size={24} />
@@ -1382,7 +1371,7 @@ const toggleSection = (section: string) => {
                       </div>
                       <div className="flex items-center gap-2">
                         <ChevronDown className={`transition-transform ${expandedSections.years ? 'rotate-180' : ''}`} />
-                        <button 
+                        <div 
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowModal('Academic Year');
@@ -1390,9 +1379,9 @@ const toggleSection = (section: string) => {
                           className="p-2 hover:bg-violet-50 rounded-lg"
                         >
                           <Plus size={18} className="text-violet-600" />
-                        </button>
+                        </div>
                       </div>
-                    </button>
+                    </div>
                     
                     {expandedSections.years && (
                       <div className="p-4 pt-0">
@@ -1438,9 +1427,9 @@ const toggleSection = (section: string) => {
 
                   {/* Terms Section */}
                   <Card className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                    <button 
+                    <div 
                       onClick={() => toggleSection('terms')}
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <Clock className="text-rose-600" size={24} />
@@ -1465,7 +1454,7 @@ const toggleSection = (section: string) => {
                         </select>
                         <div className="flex items-center gap-2">
                           <ChevronDown className={`transition-transform ${expandedSections.terms ? 'rotate-180' : ''}`} />
-                          <button 
+                          <div 
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!selectedYearForTerms) {
@@ -1478,10 +1467,10 @@ const toggleSection = (section: string) => {
                             className="p-2 hover:bg-rose-50 rounded-lg"
                           >
                             <Plus size={18} className="text-rose-600" />
-                          </button>
+                          </div>
                         </div>
                       </div>
-                    </button>
+                    </div>
                     
                     {expandedSections.terms && (
                       <div className="p-4 pt-0">
@@ -1529,9 +1518,9 @@ const toggleSection = (section: string) => {
 
                   {/* Curricula Section */}
                   <Card className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                    <button 
+                    <div 
                       onClick={() => toggleSection('curricula')}
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <Book className="text-blue-600" size={24} />
@@ -1542,7 +1531,7 @@ const toggleSection = (section: string) => {
                       </div>
                       <div className="flex items-center gap-2">
                         <ChevronDown className={`transition-transform ${expandedSections.curricula ? 'rotate-180' : ''}`} />
-                        <button 
+                        <div 
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowModal('Curriculum');
@@ -1550,9 +1539,9 @@ const toggleSection = (section: string) => {
                           className="p-2 hover:bg-blue-50 rounded-lg"
                         >
                           <Plus size={18} className="text-blue-600" />
-                        </button>
+                        </div>
                       </div>
-                    </button>
+                    </div>
                     
                     {expandedSections.curricula && (
                       <div className="p-4 pt-0">
@@ -1703,219 +1692,416 @@ const toggleSection = (section: string) => {
                   </div>
                 </div>
 
-                {/* Grading Systems Display */}
-                {selectedView === 'table' ? (
-                  <Card className="bg-white rounded-2xl shadow-lg border border-slate-200">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-slate-200">
-                            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">System</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Type</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Pass Mark</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Grades</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Status</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {getGradingSystemsByType(selectedGradingType).map((system: GradingSystem) => (
-                            <tr key={system.id} className="hover:bg-slate-50 transition-colors">
-                              <td className="py-3 px-4">
-                                <div>
-                                  <p className="font-medium text-slate-900">{system.name}</p>
-                                  <p className="text-sm text-slate-500">{system.description}</p>
-                                </div>
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  system.type === 'subject' ? 'bg-blue-100 text-blue-700' :
-                                  system.type === 'overall_points' ? 'bg-amber-100 text-amber-700' :
-                                  'bg-purple-100 text-purple-700'
-                                }`}>
-                                  {system.type.replace('_', ' ')}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className="font-semibold text-slate-900">{system.min_pass_mark}%</span>
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex gap-1">
-                                  {system.grades.slice(0, 3).map((g: GradeScale) => (
-                                    <span 
-                                      key={g.id}
-                                      className="text-xs font-medium px-2 py-1 rounded-full text-white"
-                                      style={{ backgroundColor: g.color_code || '#3B82F6' }}
-                                    >
-                                      {g.grade}
+                {/* Empty State */}
+                {!loading && getGradingSystemsByType(selectedGradingType).length === 0 && (
+                  <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                      <BarChart className="text-slate-400" size={24} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                      {searchQuery ? 'No matching systems found' : 'No Grading Systems Found'}
+                    </h3>
+                    <p className="text-slate-600 max-w-md mb-6">
+                      {searchQuery 
+                        ? 'Try adjusting your search terms or filters.' 
+                        : selectedGradingType === 'subject' 
+                          ? 'No subject grading systems found for the selected curriculum.' 
+                          : `No ${selectedGradingType.replace('_', ' ')} grading systems found.`}
+                    </p>
+                    <button 
+                      onClick={() => setShowModal('Grading System')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                      <Plus size={18} />
+                      Create Grading System
+                    </button>
+                  </div>
+                )}
+
+                {/* Data Display - Only show if we have data */}
+                {!loading && getGradingSystemsByType(selectedGradingType).length > 0 && (
+                  selectedView === 'table' ? (
+                    <Card className="bg-white rounded-2xl shadow-lg border border-slate-200">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">System</th>
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Type</th>
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Curriculum</th>
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Pass Mark</th>
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Grades</th>
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Status</th>
+                              <th className="py-3 px-4 text-left text-sm font-semibold text-slate-700">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {getGradingSystemsByType(selectedGradingType).map((system: GradingSystem) => (
+                              <tr key={system.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="py-3 px-4">
+                                  <div>
+                                    <p className="font-medium text-slate-900">{system.name}</p>
+                                    <p className="text-sm text-slate-500">{system.description || 'No description'}</p>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium capitalize bg-blue-100 text-blue-700">
+                                    {system.type?.replace('_', ' ') || 'subject'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span className="text-sm text-slate-700">
+                                    {system.curriculum_id ? 
+                                      curricula.find(c => c.id === system.curriculum_id)?.name || 'N/A' 
+                                      : 'All Curricula'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-slate-900">{system.min_pass_mark || 40}%</span>
+                                    <span className="text-xs text-slate-500">Minimum pass</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex flex-wrap gap-1">
+                                    {/* Sort grades by min_score descending for better display */}
+                                    {[...(system.grades || [])]
+                                      .sort((a, b) => parseFloat(b.min_score || '0') - parseFloat(a.min_score || '0'))
+                                      .slice(0, 4)
+                                      .map((g) => (
+                                        <div 
+                                          key={g.id}
+                                          className="relative group"
+                                          title={`${g.min_score || '0'}-${g.max_score || '0'}: ${g.grade} (${g.points || '0'} pts)`}
+                                        >
+                                          <span 
+                                            className="text-xs font-medium px-2 py-1 rounded-full text-white shadow-sm"
+                                            style={{ 
+                                              backgroundColor: g.color_code || 
+                                                (parseFloat(g.min_score || '0') >= 80 ? '#10B981' : // Green for A
+                                                 parseFloat(g.min_score || '0') >= 60 ? '#3B82F6' : // Blue for B
+                                                 parseFloat(g.min_score || '0') >= 40 ? '#F59E0B' : // Amber for C/D
+                                                 '#EF4444') // Red for failing grades
+                                            }}
+                                          >
+                                            {g.grade}
+                                          </span>
+                                          {/* Tooltip on hover */}
+                                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+                                            <div className="bg-slate-900 text-white text-xs rounded-lg py-1 px-2 whitespace-nowrap">
+                                              {g.min_score || '0'}-{g.max_score || '0'}% = {g.grade} ({g.points || '0'} pts)
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    {(system.grades?.length || 0) > 4 && (
+                                      <div className="relative group">
+                                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                                          +{(system.grades?.length || 0) - 4}
+                                        </span>
+                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+                                          <div className="bg-slate-900 text-white text-xs rounded-lg py-2 px-3 max-w-xs">
+                                            <div className="font-medium mb-1">All Grades:</div>
+                                            <div className="grid grid-cols-3 gap-1">
+                                              {system.grades?.map(g => (
+                                                <div key={g.id} className="text-center">
+                                                  <div className="font-semibold">{g.grade}</div>
+                                                  <div className="text-slate-300 text-xs">{g.min_score || '0'}-{g.max_score || '0'}%</div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex flex-col gap-1">
+                                    {system.is_default && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                                        <CheckCircle size={10} /> Default
+                                      </span>
+                                    )}
+                                    <span className={`text-xs px-2 py-1 rounded-full ${system.is_active !== false ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                                      {system.is_active !== false ? 'Active' : 'Inactive'}
                                     </span>
-                                  ))}
-                                  {system.grades.length > 3 && (
-                                    <span className="text-xs text-slate-500">
-                                      +{system.grades.length - 3}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedGradingSystem(system.id);
+                                        // Add a detail view state if needed
+                                      }}
+                                      className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                                      title="View Details"
+                                    >
+                                      <Eye size={16} className="text-slate-600" />
+                                    </button>
+                                    <button 
+                                      onClick={() => openEditModal('Grading System', system)}
+                                      className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                                      title="Edit System"
+                                    >
+                                      <Edit3 size={16} className="text-blue-600" />
+                                    </button>
+                                    {!system.is_default && (
+                                      <button 
+                                        onClick={() => handleDelete('/grading/systems', system.id, system.name)}
+                                        className="p-1.5 hover:bg-rose-50 rounded-lg transition-colors"
+                                        title="Delete System"
+                                      >
+                                        <Trash2 size={16} className="text-rose-600" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+                  ) : selectedView === 'grid' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {getGradingSystemsByType(selectedGradingType).map((system: GradingSystem) => (
+                        <Card key={system.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 hover:shadow-xl transition-all duration-200 hover:border-blue-200">
+                          <div className="p-5">
+                            {/* Header */}
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                    {system.type?.toUpperCase() || 'SUBJECT'}
+                                  </span>
+                                  {system.is_default && (
+                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                      Default
                                     </span>
                                   )}
                                 </div>
-                              </td>
-                              <td className="py-3 px-4">
-                                {system.is_default ? (
-                                  <span className="flex items-center gap-1 text-emerald-700 font-medium text-sm">
-                                    <CheckCircle size={14} /> Default
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-500 text-sm">Active</span>
+                                <h4 className="font-semibold text-slate-900 truncate">{system.name}</h4>
+                                <p className="text-sm text-slate-500 mt-1 line-clamp-2">
+                                  {system.description || 'No description provided'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Curriculum Info */}
+                            <div className="mb-4 p-3 bg-slate-50 rounded-lg">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <p className="text-xs text-slate-500 mb-1">Curriculum</p>
+                                  <p className="font-medium text-slate-900 text-sm">
+                                    {system.curriculum_id ? 
+                                      curricula.find(c => c.id === system.curriculum_id)?.name || 'N/A' 
+                                      : 'All'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-500 mb-1">Pass Mark</p>
+                                  <p className="font-semibold text-lg text-slate-900">{system.min_pass_mark || 40}%</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Grades Preview */}
+                            <div className="mb-4">
+                              <p className="text-xs text-slate-500 mb-2">
+                                Grade Scale ({(system.grades?.length || 0)} grades)
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {[...(system.grades || [])]
+                                  .sort((a, b) => parseFloat(b.min_score || '0') - parseFloat(a.min_score || '0'))
+                                  .slice(0, 5)
+                                  .map((g) => (
+                                    <div key={g.id} className="relative group">
+                                      <span 
+                                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white shadow-sm flex flex-col items-center justify-center min-w-[40px]"
+                                        style={{ 
+                                          backgroundColor: g.color_code || 
+                                            (parseFloat(g.min_score || '0') >= 80 ? '#10B981' :
+                                             parseFloat(g.min_score || '0') >= 60 ? '#3B82F6' :
+                                             parseFloat(g.min_score || '0') >= 40 ? '#F59E0B' :
+                                             '#EF4444')
+                                        }}
+                                      >
+                                        <span className="text-sm">{g.grade}</span>
+                                        <span className="text-xs opacity-90">{g.points || '0'} pts</span>
+                                      </span>
+                                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
+                                        <div className="bg-slate-900 text-white text-xs rounded-lg py-1 px-2 whitespace-nowrap">
+                                          {g.min_score || '0'}-{g.max_score || '0'}% = {g.grade}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                {(system.grades?.length || 0) > 5 && (
+                                  <div className="relative group">
+                                    <span className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center h-full">
+                                      +{(system.grades?.length || 0) - 5}
+                                    </span>
+                                  </div>
                                 )}
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex gap-2">
+                              </div>
+                            </div>
+
+                            {/* Grade Distribution Visualization */}
+                            <div className="mb-4">
+                              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                                <span>Grade Distribution</span>
+                                <span>
+                                  Top: {system.grades?.[0]?.grade || 'N/A'} 
+                                  ({system.grades?.[0]?.points || '0'} pts)
+                                </span>
+                              </div>
+                              <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full flex">
+                                  {[...(system.grades || [])]
+                                    .sort((a, b) => parseFloat(b.min_score || '0') - parseFloat(a.min_score || '0'))
+                                    .slice(0, 5)
+                                    .map((g, index) => {
+                                      const width = 100 / Math.min((system.grades?.length || 1), 5);
+                                      return (
+                                        <div 
+                                          key={g.id}
+                                          className="h-full"
+                                          style={{ 
+                                            width: `${width}%`,
+                                            backgroundColor: g.color_code || 
+                                              (parseFloat(g.min_score || '0') >= 80 ? '#10B981' :
+                                               parseFloat(g.min_score || '0') >= 60 ? '#3B82F6' :
+                                               parseFloat(g.min_score || '0') >= 40 ? '#F59E0B' :
+                                               '#EF4444')
+                                          }}
+                                          title={`${g.grade}: ${g.min_score || '0'}-${g.max_score || '0'}%`}
+                                        />
+                                      );
+                                    })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2 pt-4 border-t border-slate-100">
+                              <button 
+                                onClick={() => {
+                                  setSelectedGradingSystem(system.id);
+                                  // Add a detail view state if needed
+                                }}
+                                className="flex-1 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+                              >
+                                <Eye size={14} /> Details
+                              </button>
+                              <button 
+                                onClick={() => openEditModal('Grading System', system)}
+                                className="flex-1 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+                              >
+                                <Edit3 size={14} /> Edit
+                              </button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    /* List View */
+                    <div className="space-y-4">
+                      {getGradingSystemsByType(selectedGradingType).map((system: GradingSystem) => (
+                        <Card key={system.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all">
+                          <div className="p-4">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                              <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center flex-shrink-0">
+                                  <BarChart className="text-blue-600" size={22} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    <h4 className="font-semibold text-slate-900 truncate">{system.name}</h4>
+                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                      {system.type?.replace('_', ' ') || 'subject'}
+                                    </span>
+                                    {system.is_default && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+                                        <CheckCircle size={10} /> Default
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-slate-600 mb-2 line-clamp-2">
+                                    {system.description || 'No description provided'}
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                      <BookOpen size={12} />
+                                      {system.curriculum_id ? 
+                                        curricula.find(c => c.id === system.curriculum_id)?.name || 'N/A' 
+                                        : 'All Curricula'}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <BarChart3 size={12} />
+                                      {(system.grades?.length || 0)} grades
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Target size={12} />
+                                      Pass: {system.min_pass_mark || 40}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {[...(system.grades || [])]
+                                    .sort((a, b) => parseFloat(b.min_score || '0') - parseFloat(a.min_score || '0'))
+                                    .slice(0, 4)
+                                    .map((g) => (
+                                      <div key={g.id} className="relative group">
+                                        <span 
+                                          className="text-xs font-semibold px-2 py-1 rounded-lg text-white"
+                                          style={{ 
+                                            backgroundColor: g.color_code || 
+                                              (parseFloat(g.min_score || '0') >= 80 ? '#10B981' :
+                                               parseFloat(g.min_score || '0') >= 60 ? '#3B82F6' :
+                                               parseFloat(g.min_score || '0') >= 40 ? '#F59E0B' :
+                                               '#EF4444')
+                                          }}
+                                        >
+                                          {g.grade}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  {(system.grades?.length || 0) > 4 && (
+                                    <span className="text-xs text-slate-500">
+                                      +{(system.grades?.length || 0) - 4} more
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex gap-1">
                                   <button 
                                     onClick={() => setSelectedGradingSystem(system.id)}
-                                    className="p-1.5 hover:bg-slate-100 rounded-lg"
+                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                    title="View Details"
                                   >
                                     <Eye size={16} className="text-slate-600" />
                                   </button>
                                   <button 
                                     onClick={() => openEditModal('Grading System', system)}
-                                    className="p-1.5 hover:bg-blue-50 rounded-lg"
+                                    className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit System"
                                   >
                                     <Edit3 size={16} className="text-blue-600" />
                                   </button>
-                                  <button 
-                                    onClick={() => handleDelete('/grading/systems', system.id, system.name)}
-                                    className="p-1.5 hover:bg-rose-50 rounded-lg"
-                                  >
-                                    <Trash2 size={16} className="text-rose-600" />
-                                  </button>
                                 </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
                     </div>
-                  </Card>
-                ) : selectedView === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {getGradingSystemsByType(selectedGradingType).map((system: GradingSystem) => (
-                      <Card key={system.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
-                        <div className="p-4">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h4 className="font-semibold text-slate-900">{system.name}</h4>
-                              <p className="text-sm text-slate-500 mt-1">{system.description}</p>
-                            </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              system.type === 'subject' ? 'bg-blue-100 text-blue-700' :
-                              system.type === 'overall_points' ? 'bg-amber-100 text-amber-700' :
-                              'bg-purple-100 text-purple-700'
-                            }`}>
-                              {system.type.replace('_', ' ')}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {system.grades.slice(0, 4).map((g: GradeScale) => (
-                              <span 
-                                key={g.id}
-                                className="text-xs font-medium px-2 py-1 rounded-full text-white"
-                                style={{ backgroundColor: g.color_code || '#3B82F6' }}
-                              >
-                                {g.grade}
-                              </span>
-                            ))}
-                            {system.grades.length > 4 && (
-                              <span className="text-xs text-slate-500">
-                                +{system.grades.length - 4} more
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex justify-between items-center mb-3">
-                            <div>
-                              <p className="text-sm text-slate-600">Pass Mark</p>
-                              <p className="font-semibold text-slate-900">{system.min_pass_mark}%</p>
-                            </div>
-                            {system.is_default && (
-                              <span className="text-xs font-medium bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
-                                Default
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex gap-2 pt-3 border-t border-slate-100">
-                            <button 
-                              onClick={() => setSelectedGradingSystem(system.id)}
-                              className="flex-1 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              View
-                            </button>
-                            <button 
-                              onClick={() => openEditModal('Grading System', system)}
-                              className="flex-1 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {getGradingSystemsByType(selectedGradingType).map((system: GradingSystem) => (
-                      <Card key={system.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 hover:shadow-md transition-shadow">
-                        <div className="p-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-start sm:items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
-                                <BarChart className="text-indigo-600" size={20} />
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-slate-900">{system.name}</h4>
-                                <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
-                                  <span>{system.curriculum?.name || 'All Curricula'}</span>
-                                  <span>•</span>
-                                  <span>{system.grades.length} grades</span>
-                                  <span>•</span>
-                                  <span className="font-medium text-slate-700">{system.min_pass_mark}% pass</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <div className="flex gap-1">
-                                {system.grades.slice(0, 3).map((g: GradeScale) => (
-                                  <span 
-                                    key={g.id}
-                                    className="text-xs font-medium px-2 py-1 rounded-full text-white"
-                                    style={{ backgroundColor: g.color_code || '#3B82F6' }}
-                                  >
-                                    {g.grade}
-                                  </span>
-                                ))}
-                              </div>
-                              <div className="flex gap-1">
-                                <button 
-                                  onClick={() => setSelectedGradingSystem(system.id)}
-                                  className="p-1.5 hover:bg-slate-100 rounded-lg"
-                                >
-                                  <Eye size={16} className="text-slate-600" />
-                                </button>
-                                <button 
-                                  onClick={() => openEditModal('Grading System', system)}
-                                  className="p-1.5 hover:bg-blue-50 rounded-lg"
-                                >
-                                  <Edit3 size={16} className="text-blue-600" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
+                  )
                 )}
-
                 {/* Grade Scale Preview Modal */}
                 {selectedGradingSystem && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
