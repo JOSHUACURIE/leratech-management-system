@@ -222,7 +222,8 @@ interface FormData {
   subStrandOrder: string;
   learningOutcomes: string[];
   assessmentCriteria: string[];
-  
+  strandIdForSubStrand: string; 
+
   // Bulk Subjects for Grading
   selectedSubjects: string[];
   bulkMinPassMark: string;
@@ -354,6 +355,7 @@ const AcademicSetup: React.FC = () => {
     subStrandName: "",
     subStrandCode: "",
     subStrandDescription: "",
+    
     subStrandOrder: "1",
     learningOutcomes: [""],
     assessmentCriteria: [""],
@@ -390,7 +392,7 @@ const fetchAcademicData = async () => {
     
     if (activeTab === 'cbc') {
       requests.push(api.get('/cbc/strands'));
-      requests.push(api.get('/scheme-topics'));
+      requests.push(api.get('/cbc/scheme-topics'));
     }
 
     const responses = await Promise.allSettled(requests);
@@ -825,6 +827,7 @@ setGradingSystems(gradingSystemsData)
       curriculumIdForGrading: "",
       subjectIdForGrading: "",
       classIdForGrading: "",
+       strandIdForSubStrand: "", 
       streamIdForGrading: "",
       studentTypeForGrading: "",
       setIsDefault: false,
@@ -3146,21 +3149,25 @@ const toggleSection = (section: string) => {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Parent Strand</label>
-                <select
-                  value={formData.subjectIdForStrand}
-                  onChange={(e) => setFormData({...formData, subjectIdForStrand: e.target.value})}
-                  className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
-                >
-                  <option value="">Select Strand</option>
-                  {cbcStrands.map(strand => (
-                    <option key={strand.id} value={strand.id}>
-                      {strand.name} ({strand.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+             <div>
+  <label className="block text-sm font-semibold text-slate-700 mb-2">Parent Strand</label>
+  <select
+    value={formData.strandIdForSubStrand || formData.subjectIdForStrand}
+    onChange={(e) => setFormData({
+      ...formData, 
+      strandIdForSubStrand: e.target.value,
+      subjectIdForStrand: e.target.value  // Keep for backward compatibility
+    })}
+    className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
+  >
+    <option value="">Select Strand</option>
+    {cbcStrands.map(strand => (
+      <option key={strand.id} value={strand.id}>
+        {strand.name} ({strand.code})
+      </option>
+    ))}
+  </select>
+</div>
               
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Order</label>
