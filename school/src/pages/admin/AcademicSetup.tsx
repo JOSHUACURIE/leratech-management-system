@@ -621,6 +621,7 @@ setGradingSystems(gradingSystemsData)
           await api.post('/cbc/strands', payload);
         }
       }
+
       else if (showModal === 'CBC Sub-Strand') {
         const payload = {
           name: formData.subStrandName,
@@ -628,7 +629,8 @@ setGradingSystems(gradingSystemsData)
           description: formData.subStrandDescription,
           order: parseInt(formData.subStrandOrder),
           learning_outcomes: formData.learningOutcomes.filter(lo => lo.trim()),
-          assessment_criteria: formData.assessmentCriteria.filter(ac => ac.trim())
+          assessment_criteria: formData.assessmentCriteria.filter(ac => ac.trim()),
+           strandIdForSubStrand: formData.strandIdForSubStrand,
         };
         
         if (isEdit) {
@@ -841,6 +843,7 @@ setGradingSystems(gradingSystemsData)
       subjectIdForStrand: "",
       subStrandName: "",
       subStrandCode: "",
+      
       subStrandDescription: "",
       subStrandOrder: "1",
       learningOutcomes: [""],
@@ -2355,21 +2358,24 @@ const toggleSection = (section: string) => {
             )}
 
             {/* Schemes of Work Tab */}
-            {activeTab === 'schemes' && (
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Schemes of Work</h2>
-                    <p className="text-sm text-slate-600">Manage teaching plans and scheme topics</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:opacity-90 transition-opacity flex items-center gap-2">
-                      <Plus size={18} /> Add Topic
-                    </button>
-                  </div>
-                </div>
-
+            {/* Schemes of Work Tab */}
+{activeTab === 'schemes' && (
+  <div className="space-y-6">
+    {/* Header */}
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Schemes of Work</h2>
+        <p className="text-sm text-slate-600">Manage teaching plans and scheme topics</p>
+      </div>
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setShowModal('Scheme Topic')}
+          className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:opacity-90 transition-opacity flex items-center gap-2"
+        >
+          <Plus size={18} /> Add Topic
+        </button>
+      </div>
+    </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Scheme Topics */}
                   <div className="lg:col-span-2">

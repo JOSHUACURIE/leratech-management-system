@@ -26,7 +26,8 @@ import PerformanceAnalysis from "./pages/teacher/ClassPerformance";
 import Assignments from "./pages/teacher/Assignment";
 import Notices from "./pages/teacher/Notices";
 import LessonPlan from "./pages/teacher/LessonPlan";
-
+import RecordOfWorkCovered from "./pages/teacher/RecordOfWorkCovered";
+import MySchemes from "./pages/teacher/MySchemes";
 // Parent Pages
 import ParentDashboard from "./pages/parent/Dashboard";
 import Results from "./pages/parent/Results";
@@ -213,6 +214,20 @@ function App() {
             <ProtectedRoute allowedRoles={["teacher"]}>
               <DashboardLayout role="teacher">
                 <CBCAssessment />
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="schemes" element={
+            <ProtectedRoute allowedRoles={["teacher"]}>
+              <DashboardLayout role="teacher">
+                <MySchemes />
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="records" element={
+            <ProtectedRoute allowedRoles={["teacher"]}>
+              <DashboardLayout role="teacher">
+                <RecordOfWorkCovered />
               </DashboardLayout>
             </ProtectedRoute>
           } />

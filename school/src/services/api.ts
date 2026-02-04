@@ -172,7 +172,106 @@ export interface Assignment {
   };
   submissions?: AssignmentSubmission[];
 }
+//scheme related types
+export interface SchemeParams {
+  status?: string;
+  subjectId?: string;
+  classId?: string;
+  termId?: string;
+  search?: string;
+}
 
+export interface RecordParams {
+  status?: string;
+  subjectId?: string;
+  classId?: string;
+  termId?: string;
+  week?: number;
+  schemeId?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
+export interface CoverageParams {
+  termId?: string;
+  subjectId?: string;
+}
+
+export interface ExportParams {
+  format?: 'pdf' | 'excel' | 'json';
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface SchemeTopicParams {
+  week?: number;
+}
+
+// Define data types for requests
+export interface CreateSchemeData {
+  title: string;
+  subject_id: string;
+  class_id: string;
+  stream_id?: string;
+  term_id: string;
+  academic_year_id: string;
+  description?: string;
+}
+
+export interface UpdateSchemeData {
+  title?: string;
+  description?: string;
+  status?: string;
+}
+
+export interface CreateTopicData {
+  topic_title: string;
+  week_number: number;
+  cbc_strand?: string;
+  cbc_sub_strand?: string;
+  learning_objectives?: string[];
+  key_activities?: string[];
+  resources_needed?: string[];
+  assessment_methods?: string[];
+}
+
+export interface UpdateTopicData {
+  topic_title?: string;
+  week_number?: number;
+  cbc_strand?: string;
+  cbc_sub_strand?: string;
+  learning_objectives?: string[];
+  key_activities?: string[];
+  resources_needed?: string[];
+  assessment_methods?: string[];
+}
+
+export interface CreateRecordData {
+  week_number: number;
+  lesson_date: string;
+  topics_covered: string[];
+  activities_done?: string[];
+  challenges?: string;
+  remarks?: string;
+  subject_id: string;
+  class_id: string;
+  term_id: string;
+  scheme_of_work_id?: string;
+  scheme_topic_id?: string;
+}
+
+export interface UpdateRecordData {
+  lesson_date?: string;
+  topics_covered?: string[];
+  activities_done?: string[];
+  challenges?: string;
+  remarks?: string;
+}
+
+export interface DuplicateSchemeData {
+  title?: string;
+}
 export interface AssignmentSubmission {
   id: string;
   assignment_id: string;
@@ -1915,6 +2014,361 @@ export const teacherAPI = {
   
   getCbcStrandMasteryReport: (params: { subjectId: string; classId: string; termId: string }) => 
     api.get('/cbc/reports/strand-mastery', { params }),
+
+
+getMySchemes: async (params: SchemeParams = {}): Promise<any> => {
+    try {
+      const response = await api.get('/teachers/schemes', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 2. Get scheme details
+ getSchemeDetails: async (schemeId: string): Promise<any> => {
+    try {
+      const response = await api.get(`/teachers/schemes/${schemeId}`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+createSchemeOfWork: async (data: CreateSchemeData): Promise<any> => {
+    try {
+      const response = await api.post('/teachers/schemes', data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 4. Update scheme
+  updateSchemeOfWork: async (schemeId: string, data: UpdateSchemeData): Promise<any> => {
+    try {
+      const response = await api.put(`/teachers/schemes/${schemeId}`, data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 5. Delete scheme
+    deleteSchemeOfWork: async (schemeId: string): Promise<any> => {
+    try {
+      const response = await api.delete(`/teachers/schemes/${schemeId}`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 6. Submit scheme for approval
+  submitSchemeForApproval: async (schemeId: string): Promise<any> => {
+    try {
+      const response = await api.post(`/teachers/schemes/${schemeId}/submit`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 7. Get topics for a scheme
+  getSchemeTopics: async (schemeId: string, params: SchemeTopicParams = {}): Promise<any> => {
+    try {
+      const response = await api.get(`/teachers/schemes/${schemeId}/topics`, { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 8. Create new topic
+ createSchemeTopic: async (schemeId: string, data: CreateTopicData): Promise<any> => {
+    try {
+      const response = await api.post(`/teachers/schemes/${schemeId}/topics`, data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+  // 9. Update topic
+   updateSchemeTopic: async (topicId: string, data: UpdateTopicData): Promise<any> => {
+    try {
+      const response = await api.put(`/teachers/schemes/topics/${topicId}`, data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+  // 10. Delete topic
+   deleteSchemeTopic: async (topicId: string): Promise<any> => {
+    try {
+      const response = await api.delete(`/teachers/schemes/topics/${topicId}`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+  // 11. Export scheme
+  exportScheme: async (schemeId: string, format: 'pdf' | 'excel' | 'json' = 'pdf'): Promise<any> => {
+    try {
+      const response = await api.get(`/teachers/schemes/${schemeId}/export`, {
+        params: { format },
+        responseType: 'blob'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+  // 12. Get scheme template (for creating new schemes)
+  getSchemeTemplate: async (params = {}) => {
+    try {
+      const response = await api.get('/teachers/schemes/templates', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 13. Duplicate scheme
+duplicateScheme: async (schemeId: string, data: DuplicateSchemeData = {}): Promise<any> => {
+    try {
+      const response = await api.post(`/teachers/schemes/${schemeId}/duplicate`, data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /* ==============================
+     RECORDS OF WORK API
+  ============================== */
+  
+  // 1. Get all records for the teacher
+  getMyRecordsOfWork: async (params = {}) => {
+    try {
+      const response = await api.get('/teachers/records', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 2. Get record details
+  getRecordDetails: async (recordId: string): Promise<any> => {
+    try {
+      const response = await api.get(`/teachers/records/${recordId}`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+
+  // 3. Create new record
+  createRecordOfWork: async (data: CreateRecordData): Promise<any> => {
+    try {
+      const response = await api.post('/teachers/records', data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+
+  // 4. Update record
+    updateRecordOfWork: async (recordId: string, data: UpdateRecordData): Promise<any> => {
+    try {
+      const response = await api.put(`/teachers/records/${recordId}`, data);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 5. Delete record
+  deleteRecordOfWork: async (recordId: string): Promise<any> => {
+    try {
+      const response = await api.delete(`/teachers/records/${recordId}`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 6. Submit record for verification
+ submitRecordOfWork: async (recordId: string): Promise<any> => {
+    try {
+      const response = await api.post(`/teachers/records/${recordId}/submit`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+  // 7. Get coverage report
+  getCoverageReport: async (params: CoverageParams = {}): Promise<any> => {
+    try {
+      const response = await api.get('/teachers/records/coverage', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 8. Export records
+  exportRecordsOfWork: async (params: ExportParams = {}): Promise<any> => {
+    try {
+      const response = await api.get('/teachers/records/export', {
+        params: { 
+          format: params.format || 'pdf',
+          ...params 
+        },
+        responseType: 'blob'
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 9. Get records by scheme
+ getRecordsByScheme: async (schemeId: string, params: RecordParams = {}): Promise<any> => {
+    try {
+      const response = await api.get(`/teachers/schemes/${schemeId}/records`, { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+
+  // 10. Upload attachments for record
+ uploadRecordAttachment: async (recordId: string, file: File): Promise<any> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await api.post(`/teachers/records/${recordId}/attachments`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // 11. Delete attachment
+  deleteRecordAttachment: async (recordId: string, attachmentId: string): Promise<any> => {
+    try {
+      const response = await api.delete(`/teachers/records/${recordId}/attachments/${attachmentId}`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /* ==============================
+     DASHBOARD & STATISTICS API
+  ============================== */
+  
+  // Get teacher dashboard statistics
+  getDashboardStats: async () => {
+    try {
+      const response = await api.get('/teacher/dashboard/stats');
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get teaching workload
+  getTeachingWorkload: async (params = {}) => {
+    try {
+      const response = await api.get('/teacher/workload', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get upcoming deadlines
+  getUpcomingDeadlines: async (params = {}) => {
+    try {
+      const response = await api.get('/teacher/deadlines', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /* ==============================
+     UTILITY & HELPER API
+  ============================== */
+  
+  // Get available academic years
+  getAcademicYears: async () => {
+    try {
+      const response = await api.get('/teacher/academic-years');
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get available terms
+  getTerms: async (params = {}) => {
+    try {
+      const response = await api.get('/teacher/terms', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get teacher's classes
+  getTeacherClasses: async () => {
+    try {
+      const response = await api.get('/teacher/classes');
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get teacher's subjects
+  getTeacherSubjects: async (params = {}) => {
+    try {
+      const response = await api.get('/teacher/subjects', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get teacher's streams
+  getTeacherStreams: async (params = {}) => {
+    try {
+      const response = await api.get('/teacher/streams', { params });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get weeks for term
+  getTermWeeks: async (termId) => {
+    try {
+      const response = await api.get(`/teacher/terms/${termId}/weeks`);
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  }
 };
 
 // ==================== ACADEMIC API ====================

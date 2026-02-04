@@ -98,6 +98,8 @@ const Sidebar: React.FC<SidebarProps> = ({ role, schoolSlug }) => {
       { label: "Performance Analysis", path: buildPath("teacher/performance"), icon: <LineChart size={20} /> },
       { label: "Attendance", path: buildPath("teacher/attendance"), icon: <CalendarCheck size={20} /> },
       { label: "Lesson Plans", path: buildPath("teacher/lesson-plans"), icon: <NotebookPen size={20} /> },
+      { label: "My Schemes", path: buildPath("teacher/schemes"), icon: <BookOpen size={20} /> },
+      { label: "Record of Work", path: buildPath("teacher/records"), icon: <NotebookPen size={20} /> },
       { label: "Assignments", path: buildPath("teacher/assignments"), icon: <FileText size={20} /> },
       { label: "Notices", path: buildPath("teacher/notices"), icon: <Bell size={20} /> },
     ],
