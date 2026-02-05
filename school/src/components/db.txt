@@ -1,0 +1,3740 @@
+-- CreateTable
+CREATE TABLE "schools" (
+    "id" UUID NOT NULL,
+    "school_code" VARCHAR(20) NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "address" TEXT,
+    "phone" VARCHAR(50),
+    "email" VARCHAR(255) NOT NULL,
+    "website" VARCHAR(255),
+    "logo_url" TEXT,
+    "curriculum_type" VARCHAR(50) DEFAULT '8-4-4',
+    "academic_year_starts_month" INTEGER DEFAULT 1,
+    "is_active" BOOLEAN DEFAULT true,
+    "subscription_tier" VARCHAR(20) DEFAULT 'free',
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "slug" VARCHAR(50),
+    "custom_domain" VARCHAR(255),
+    "primary_color" VARCHAR(7) DEFAULT '#3B82F6',
+    "favicon_url" TEXT,
+    "portal_title" VARCHAR(100),
+    "welcome_message" TEXT,
+
+    CONSTRAINT "schools_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "users" (
+    "id" UUID NOT NULL,
+    "email" VARCHAR(255) NOT NULL,
+    "phone" VARCHAR(50),
+    "first_name" VARCHAR(100) NOT NULL,
+    "last_name" VARCHAR(100) NOT NULL,
+    "national_id" VARCHAR(50),
+    "password_hash" VARCHAR(255) NOT NULL,
+    "password_salt" VARCHAR(255) NOT NULL,
+    "date_of_birth" DATE,
+    "gender" VARCHAR(10),
+    "profile_picture_url" TEXT,
+    "is_email_verified" BOOLEAN DEFAULT false,
+    "is_phone_verified" BOOLEAN DEFAULT false,
+    "is_active" BOOLEAN DEFAULT true,
+    "last_login_at" TIMESTAMPTZ,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "created_by" UUID,
+    "updated_by" UUID,
+
+    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "school_users" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "role" VARCHAR(20) NOT NULL,
+    "title" VARCHAR(100),
+    "department" VARCHAR(100),
+    "staff_id" VARCHAR(50),
+    "student_parent_code" VARCHAR(50),
+    "is_active" BOOLEAN DEFAULT true,
+    "joined_at" DATE DEFAULT CURRENT_TIMESTAMP,
+    "invited_by" UUID,
+    "created_by" UUID,
+    "updated_by" UUID,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "school_users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_sessions" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "school_id" UUID,
+    "session_token" TEXT NOT NULL,
+    "device_info" JSONB,
+    "ip_address" INET,
+    "expires_at" TIMESTAMPTZ NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "teachers" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "teacher_code" VARCHAR(50) NOT NULL,
+    "tsc_number" VARCHAR(50),
+    "qualification" VARCHAR(100),
+    "specialization" VARCHAR(100),
+    "employment_type" VARCHAR(50),
+    "date_of_employment" DATE,
+    "is_active" BOOLEAN DEFAULT true,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "teachers_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "parents" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "parent_code" VARCHAR(50) NOT NULL,
+    "occupation" VARCHAR(100),
+    "employer" VARCHAR(100),
+    "emergency_contact" VARCHAR(20),
+    "is_active" BOOLEAN DEFAULT true,
+    "registration_date" DATE,
+    "registration_source" VARCHAR(20) DEFAULT 'admin',
+    "registration_status" VARCHAR(20) DEFAULT 'pending',
+    "registration_notes" TEXT,
+    "terms_accepted" BOOLEAN DEFAULT false,
+    "privacy_policy_accepted" BOOLEAN DEFAULT false,
+    "receive_email_notifications" BOOLEAN DEFAULT true,
+    "receive_sms_notifications" BOOLEAN DEFAULT true,
+    "receive_push_notifications" BOOLEAN DEFAULT true,
+    "is_identity_verified" BOOLEAN DEFAULT false,
+    "identity_verified_by" UUID,
+    "identity_verified_at" TIMESTAMPTZ(3),
+    "last_login_at" TIMESTAMPTZ(3),
+    "last_activity_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "parents_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "subjects" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "subject_code" VARCHAR(20) NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "description" TEXT,
+    "category" VARCHAR(50),
+    "is_active" BOOLEAN DEFAULT true,
+    "curriculum_id" UUID,
+    "is_compulsory" BOOLEAN DEFAULT true,
+    "max_score" DECIMAL(5,2),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "subjects_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "academic_years" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "year_name" VARCHAR(20) NOT NULL,
+    "start_date" DATE NOT NULL,
+    "end_date" DATE NOT NULL,
+    "is_current" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "academic_years_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "terms" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_name" VARCHAR(20) NOT NULL,
+    "start_date" DATE NOT NULL,
+    "end_date" DATE NOT NULL,
+    "is_current" BOOLEAN DEFAULT false,
+    "fee_deadline" DATE,
+    "late_fee_start_date" DATE,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "terms_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "teacher_assignments" (
+    "id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "stream_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "assigned_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "teacher_assignments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "teacher_assignment_subjects" (
+    "id" UUID NOT NULL,
+    "teacher_assignment_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "teacher_assignment_subjects_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "classes" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "class_name" VARCHAR(50) NOT NULL,
+    "class_level" INTEGER,
+    "stream_count" INTEGER DEFAULT 1,
+    "capacity" INTEGER DEFAULT 40,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "classes_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "streams" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "name" VARCHAR(50) NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "streams_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "students" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "admission_number" VARCHAR(50) NOT NULL,
+    "first_name" VARCHAR(100) NOT NULL,
+    "last_name" VARCHAR(100) NOT NULL,
+    "date_of_birth" DATE,
+    "gender" VARCHAR(10),
+    "class_id" UUID,
+    "stream_id" UUID,
+    "student_type" VARCHAR(20) DEFAULT 'day_scholar',
+    "enrollment_date" DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "blood_group" VARCHAR(5),
+    "allergies" TEXT,
+    "medical_conditions" TEXT,
+    "is_active" BOOLEAN DEFAULT true,
+    "class_name" VARCHAR(50),
+    "stream_name" VARCHAR(20),
+    "academic_year" VARCHAR(10),
+    "student_status" VARCHAR(20) DEFAULT 'active',
+    "guardian_user_id" UUID,
+    "primary_parent_id" UUID,
+    "guardian_name" VARCHAR(200),
+    "guardian_phone" VARCHAR(20),
+    "guardian_email" VARCHAR(255),
+    "guardian_relationship" VARCHAR(50),
+    "billing_address" TEXT,
+    "billing_city" VARCHAR(100),
+    "billing_country" VARCHAR(100),
+    "registration_source" VARCHAR(20) DEFAULT 'admin',
+    "registration_date" DATE,
+    "registration_verified" BOOLEAN DEFAULT false,
+    "registration_notes" TEXT,
+    "credit_balance" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "students_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_fee_assignments" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "fee_structure_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "applicable_student_type" VARCHAR(20),
+    "is_active" BOOLEAN DEFAULT true,
+    "assigned_by" UUID,
+    "assigned_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notes" TEXT,
+
+    CONSTRAINT "student_fee_assignments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_parents" (
+    "id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "parent_id" UUID NOT NULL,
+    "relationship" VARCHAR(50) NOT NULL DEFAULT 'parent',
+    "is_primary_contact" BOOLEAN DEFAULT false,
+    "verified_by_admin" BOOLEAN DEFAULT false,
+    "verified_at" TIMESTAMPTZ(3),
+    "verified_by" UUID,
+    "verification_notes" TEXT,
+    "contact_priority" INTEGER DEFAULT 1,
+    "can_view_academics" BOOLEAN DEFAULT true,
+    "can_view_attendance" BOOLEAN DEFAULT true,
+    "can_view_fees" BOOLEAN DEFAULT true,
+    "can_receive_alerts" BOOLEAN DEFAULT true,
+    "can_pickup_student" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "student_parents_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_subjects" (
+    "id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "curriculum_id" UUID,
+    "enrollment_date" DATE,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'active',
+    "dropped_date" DATE,
+    "is_elective" BOOLEAN DEFAULT false,
+    "contributes_to_final_grade" BOOLEAN DEFAULT true,
+    "cbc_strands" TEXT[],
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "student_subjects_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "cbc_strands" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "curriculum_id" UUID NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "code" VARCHAR(20) NOT NULL,
+    "description" TEXT,
+    "subject_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "cbc_strands_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "cbc_sub_strands" (
+    "id" UUID NOT NULL,
+    "strand_id" UUID NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "code" VARCHAR(20) NOT NULL,
+    "description" TEXT,
+    "order" INTEGER DEFAULT 0,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "cbc_sub_strands_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_scores" (
+    "id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "assessment_id" UUID NOT NULL,
+    "score" DECIMAL(5,2) NOT NULL,
+    "grade" VARCHAR(10),
+    "points" DECIMAL(3,1),
+    "curriculum_id" UUID,
+    "cbc_strand_id" UUID,
+    "cbc_sub_strand_id" UUID,
+    "cbc_level" VARCHAR(50),
+    "cbc_comment" TEXT,
+    "is_published" BOOLEAN NOT NULL DEFAULT false,
+    "graded_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "teacher_notes" TEXT,
+    "graded_by_teacher_id" UUID,
+    "grading_system_id" UUID,
+    "student_subject_id" UUID,
+
+    CONSTRAINT "student_scores_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "grading_systems" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "description" TEXT,
+    "min_pass_mark" DECIMAL(5,2),
+    "is_default" BOOLEAN DEFAULT false,
+    "type" VARCHAR(20) NOT NULL DEFAULT 'subject',
+    "curriculum_id" UUID,
+    "subject_id" UUID,
+    "applies_to_class_id" UUID,
+    "applies_to_stream_id" UUID,
+    "applies_to_student_type" VARCHAR(20),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "grading_systems_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "curricula" (
+    "id" UUID NOT NULL,
+    "name" VARCHAR(50) NOT NULL,
+    "code" VARCHAR(20) NOT NULL,
+    "description" TEXT,
+    "is_active" BOOLEAN DEFAULT true,
+    "school_id" UUID NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "curricula_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "grading_scales" (
+    "id" UUID NOT NULL,
+    "grading_system_id" UUID NOT NULL,
+    "min_score" DECIMAL(5,2) NOT NULL,
+    "max_score" DECIMAL(5,2) NOT NULL,
+    "grade" VARCHAR(10) NOT NULL,
+    "points" DECIMAL(3,1) NOT NULL,
+    "description" TEXT,
+    "color_code" VARCHAR(7),
+    "is_passing" BOOLEAN NOT NULL DEFAULT true,
+    "cbc_level" VARCHAR(50),
+    "display_order" INTEGER DEFAULT 0,
+
+    CONSTRAINT "grading_scales_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "parent_messages" (
+    "id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "parent_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "subject_id" UUID,
+    "term_id" UUID,
+    "subject" VARCHAR(200),
+    "message" TEXT NOT NULL,
+    "channel" VARCHAR(50),
+    "sent_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "is_read" BOOLEAN DEFAULT false,
+    "read_at" TIMESTAMPTZ(3),
+    "status" VARCHAR(20) DEFAULT 'sent',
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "parent_messages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "schemes_of_work" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "stream_id" UUID,
+    "title" VARCHAR(200) NOT NULL,
+    "description" TEXT,
+    "status" VARCHAR(20) DEFAULT 'draft',
+    "submitted_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "schemes_of_work_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "scheme_topics" (
+    "id" UUID NOT NULL,
+    "scheme_of_work_id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "week_number" INTEGER NOT NULL,
+    "lesson_number" INTEGER,
+    "date_range" TEXT,
+    "topic_title" VARCHAR(200) NOT NULL,
+    "sub_topic" VARCHAR(200),
+    "learning_objectives" TEXT[],
+    "teaching_methods" TEXT[],
+    "learning_activities" TEXT[],
+    "resources" TEXT[],
+    "assessment_activities" TEXT[],
+    "references_materials" TEXT[],
+    "cbc_strand_id" UUID,
+    "cbc_sub_strand_id" UUID,
+    "cbc_level" VARCHAR(50),
+    "core_competencies" TEXT[],
+    "pci_values" TEXT[],
+    "remarks" TEXT,
+    "display_order" INTEGER DEFAULT 0,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "scheme_topics_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "scheme_approvals" (
+    "id" UUID NOT NULL,
+    "scheme_of_work_id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "approver_id" UUID NOT NULL,
+    "approval_status" VARCHAR(20) NOT NULL,
+    "approval_notes" TEXT,
+    "revision_requested" BOOLEAN DEFAULT false,
+    "revision_notes" TEXT,
+    "revision_deadline" DATE,
+    "approved_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "scheme_approvals_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "records_of_work" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "week_number" INTEGER NOT NULL,
+    "lesson_date" DATE NOT NULL,
+    "topics_covered" TEXT[],
+    "actual_activities" TEXT,
+    "challenges" TEXT,
+    "remarks" TEXT,
+    "status" VARCHAR(20) DEFAULT 'recorded',
+    "scheme_of_work_id" UUID,
+    "scheme_topic_id" UUID,
+    "verified_by_id" UUID,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "records_of_work_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "record_attachments" (
+    "id" UUID NOT NULL,
+    "record_of_work_id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "attachment_type" VARCHAR(50) NOT NULL,
+    "attachment_url" TEXT NOT NULL,
+    "attachment_name" VARCHAR(200),
+    "description" TEXT,
+    "uploaded_by" UUID,
+    "uploaded_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "record_attachments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "lesson_plans" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "lesson_date" DATE NOT NULL,
+    "lesson_time" TIME,
+    "duration_minutes" INTEGER DEFAULT 40,
+    "lesson_title" VARCHAR(200) NOT NULL,
+    "lesson_number" INTEGER,
+    "scheme_topic_id" UUID,
+    "learning_objectives" TEXT[],
+    "success_criteria" TEXT[],
+    "starter_activity" TEXT,
+    "main_activities" TEXT[],
+    "plenary_activity" TEXT,
+    "support_for_struggling" TEXT,
+    "extension_for_gifted" TEXT,
+    "sen_accommodations" TEXT[],
+    "resources_needed" TEXT[],
+    "technology_used" TEXT[],
+    "assessment_strategies" TEXT[],
+    "formative_assessment" TEXT,
+    "homework_task" TEXT,
+    "homework_duration" INTEGER,
+    "lesson_reflection" TEXT,
+    "what_went_well" TEXT,
+    "areas_for_improvement" TEXT,
+    "next_steps" TEXT,
+    "status" VARCHAR(20) DEFAULT 'planned',
+    "completed_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "lesson_plans_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "lesson_plan_templates" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "template_name" VARCHAR(100) NOT NULL,
+    "subject_id" UUID,
+    "class_id" UUID,
+    "template_structure" JSONB NOT NULL,
+    "default_objectives" TEXT[],
+    "default_activities" TEXT[],
+    "default_resources" TEXT[],
+    "is_shared" BOOLEAN DEFAULT false,
+    "shared_with_department" BOOLEAN DEFAULT false,
+    "shared_with_school" BOOLEAN DEFAULT false,
+    "usage_count" INTEGER DEFAULT 0,
+    "last_used_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "lesson_plan_templates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "attendance" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "teacher_id" UUID,
+    "subject_id" UUID,
+    "attendance_date" DATE NOT NULL,
+    "status" VARCHAR(20) NOT NULL,
+    "reason" TEXT,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "attendance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assessments" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "teacher_assignment_id" UUID,
+    "student_subject_id" UUID,
+    "class_id" UUID,
+    "stream_id" UUID,
+    "created_by" UUID,
+    "curriculum_id" UUID,
+    "grading_system_id" UUID,
+    "title" VARCHAR(200) NOT NULL,
+    "description" TEXT,
+    "type" VARCHAR(50) NOT NULL,
+    "max_score" DECIMAL(6,2) NOT NULL,
+    "weight" DECIMAL(3,2) DEFAULT 1.0,
+    "due_date" DATE,
+    "submission_date" DATE,
+    "is_published" BOOLEAN DEFAULT false,
+    "published_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assessments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_structures" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "structure_name" VARCHAR(100) NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "class_id" UUID,
+    "student_type" VARCHAR(20),
+    "applies_to_all_terms" BOOLEAN DEFAULT false,
+    "is_active" BOOLEAN DEFAULT true,
+    "description" TEXT,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "fee_structures_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_statements" (
+    "id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "statement_date" DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "opening_balance" DECIMAL(10,2) NOT NULL,
+    "total_charges" DECIMAL(10,2) NOT NULL,
+    "total_payments" DECIMAL(10,2) NOT NULL,
+    "closing_balance" DECIMAL(10,2) NOT NULL,
+    "is_published" BOOLEAN DEFAULT false,
+    "published_at" TIMESTAMPTZ(3),
+    "sent_to_parent" BOOLEAN DEFAULT false,
+    "sent_at" TIMESTAMPTZ(3),
+    "parent_viewed" BOOLEAN DEFAULT false,
+    "viewed_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "fee_statements_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_statement_items" (
+    "id" UUID NOT NULL,
+    "fee_statement_id" UUID NOT NULL,
+    "item_type" VARCHAR(20) NOT NULL,
+    "item_date" DATE NOT NULL,
+    "description" TEXT NOT NULL,
+    "reference_number" VARCHAR(50),
+    "amount" DECIMAL(10,2) NOT NULL,
+    "balance" DECIMAL(10,2) NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "fee_statement_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_items" (
+    "id" UUID NOT NULL,
+    "fee_structure_id" UUID NOT NULL,
+    "subject_id" UUID,
+    "item_name" VARCHAR(100) NOT NULL,
+    "description" TEXT,
+    "base_amount" DECIMAL(10,2),
+    "is_compulsory" BOOLEAN DEFAULT true,
+    "can_be_paid_in_installments" BOOLEAN DEFAULT false,
+    "max_installments" INTEGER DEFAULT 1,
+    "tax_rate" DECIMAL(5,2) DEFAULT 0.00,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "fee_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "term_fee_items" (
+    "id" UUID NOT NULL,
+    "fee_item_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "due_date" DATE,
+    "is_active" BOOLEAN DEFAULT true,
+
+    CONSTRAINT "term_fee_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "term_fee_structures" (
+    "id" UUID NOT NULL,
+    "fee_structure_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "is_active" BOOLEAN DEFAULT true,
+    "effective_date" DATE,
+    "expiry_date" DATE,
+
+    CONSTRAINT "term_fee_structures_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "invoices" (
+    "id" UUID NOT NULL,
+    "invoice_number" VARCHAR(50) NOT NULL,
+    "student_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "fee_structure_id" UUID,
+    "student_fee_assignment_id" UUID,
+    "installment_number" INTEGER DEFAULT 1,
+    "total_installments" INTEGER DEFAULT 1,
+    "installment_due_date" DATE,
+    "total_amount" DECIMAL(10,2) NOT NULL,
+    "amount_paid" DECIMAL(10,2) DEFAULT 0.00,
+    "balance" DECIMAL(10,2),
+    "invoice_date" DATE DEFAULT CURRENT_TIMESTAMP,
+    "due_date" DATE NOT NULL,
+    "status" VARCHAR(20) DEFAULT 'pending',
+    "late_fee_applied" BOOLEAN DEFAULT false,
+    "late_fee_amount" DECIMAL(10,2) DEFAULT 0.00,
+    "late_fee_percentage" DECIMAL(5,2) DEFAULT 0.00,
+    "cancelled_at" TIMESTAMPTZ(3),
+    "cancelled_by" UUID,
+    "cancellation_reason" TEXT,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "invoices_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "invoice_items" (
+    "id" UUID NOT NULL,
+    "invoice_id" UUID NOT NULL,
+    "fee_item_id" UUID,
+    "term_fee_item_id" UUID,
+    "subject_id" UUID,
+    "item_name" VARCHAR(100) NOT NULL,
+    "description" TEXT,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "quantity" INTEGER DEFAULT 1,
+    "tax_rate" DECIMAL(5,2) DEFAULT 0.00,
+    "tax_amount" DECIMAL(10,2) DEFAULT 0.00,
+    "total_amount" DECIMAL(10,2) NOT NULL,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "invoice_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payments" (
+    "id" UUID NOT NULL,
+    "payment_reference" VARCHAR(100) NOT NULL,
+    "invoice_id" UUID,
+    "student_id" UUID NOT NULL,
+    "installment_number" INTEGER DEFAULT 1,
+    "total_installments" INTEGER DEFAULT 1,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "payment_method" VARCHAR(50) NOT NULL,
+    "transaction_id" VARCHAR(100),
+    "payer_name" VARCHAR(200),
+    "payer_phone" VARCHAR(50),
+    "payer_email" VARCHAR(255),
+    "status" VARCHAR(20) DEFAULT 'completed',
+    "verified_by" UUID,
+    "verified_at" TIMESTAMPTZ(3),
+    "reconciled_at" TIMESTAMPTZ(3),
+    "reconciled_by" UUID,
+    "receipt_number" VARCHAR(50),
+    "receipt_url" TEXT,
+    "bank_reference" VARCHAR(100),
+    "mpesa_receipt" VARCHAR(50),
+    "is_partial_payment" BOOLEAN DEFAULT false,
+    "remaining_balance" DECIMAL(10,2),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payment_methods" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "method_name" VARCHAR(50) NOT NULL,
+    "is_active" BOOLEAN DEFAULT true,
+    "account_details" JSONB,
+    "config" JSONB,
+    "fee_percentage" DECIMAL(5,2) DEFAULT 0.00,
+    "min_amount" DECIMAL(10,2),
+    "max_amount" DECIMAL(10,2),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "payment_methods_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "late_fee_configs" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "name" VARCHAR(100) NOT NULL,
+    "description" TEXT,
+    "grace_period_days" INTEGER NOT NULL DEFAULT 7,
+    "late_fee_type" VARCHAR(20) NOT NULL DEFAULT 'fixed',
+    "late_fee_amount" DECIMAL(10,2),
+    "late_fee_percentage" DECIMAL(5,2),
+    "compound_late_fee" BOOLEAN DEFAULT false,
+    "compound_frequency" VARCHAR(20) DEFAULT 'monthly',
+    "is_active" BOOLEAN DEFAULT true,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "late_fee_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_waivers" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "term_id" UUID NOT NULL,
+    "waiver_type" VARCHAR(50) NOT NULL,
+    "waiver_amount" DECIMAL(10,2) NOT NULL,
+    "percentage" DECIMAL(5,2),
+    "reason" TEXT,
+    "approved_by" UUID,
+    "approved_at" TIMESTAMPTZ(3),
+    "is_active" BOOLEAN DEFAULT true,
+    "start_date" DATE NOT NULL,
+    "end_date" DATE,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "fee_waivers_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payment_installments" (
+    "id" UUID NOT NULL,
+    "payment_id" UUID NOT NULL,
+    "installment_number" INTEGER NOT NULL,
+    "amount_due" DECIMAL(10,2) NOT NULL,
+    "amount_paid" DECIMAL(10,2) NOT NULL,
+    "due_date" DATE NOT NULL,
+    "paid_date" DATE,
+    "status" VARCHAR(20) DEFAULT 'pending',
+    "late_fee_applied" BOOLEAN DEFAULT false,
+    "late_fee_amount" DECIMAL(10,2) DEFAULT 0.00,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "payment_installments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_reports" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "report_type" VARCHAR(50) NOT NULL,
+    "report_period" VARCHAR(50) NOT NULL,
+    "start_date" DATE NOT NULL,
+    "end_date" DATE NOT NULL,
+    "total_revenue" DECIMAL(12,2) NOT NULL,
+    "total_expenses" DECIMAL(12,2) NOT NULL,
+    "net_balance" DECIMAL(12,2) NOT NULL,
+    "generated_by" UUID NOT NULL,
+    "report_data" JSONB,
+    "is_published" BOOLEAN DEFAULT false,
+    "published_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "financial_reports_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "refund_requests" (
+    "id" TEXT NOT NULL,
+    "refund_reference" TEXT NOT NULL,
+    "school_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "invoice_id" UUID,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "reason" TEXT NOT NULL,
+    "payment_method" VARCHAR(50) NOT NULL,
+    "bank_details" JSONB,
+    "mpesa_number" VARCHAR(20),
+    "status" VARCHAR(20) NOT NULL DEFAULT 'pending',
+    "requested_by" UUID NOT NULL,
+    "requested_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "approved_by" UUID,
+    "approved_at" TIMESTAMPTZ,
+    "approved_notes" TEXT,
+    "processed_by" UUID,
+    "processed_at" TIMESTAMPTZ,
+    "transaction_reference" VARCHAR(100),
+    "payment_date" TIMESTAMPTZ,
+    "bank_receipt_number" VARCHAR(50),
+    "mpesa_confirmation_code" VARCHAR(50),
+    "processing_notes" TEXT,
+    "rejected_by" UUID,
+    "rejected_at" TIMESTAMPTZ,
+    "rejection_reason" TEXT,
+    "notes" TEXT,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "refund_requests_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "expenses" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "expense_date" DATE NOT NULL,
+    "category" VARCHAR(100) NOT NULL,
+    "description" TEXT NOT NULL,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "vendor_name" VARCHAR(200),
+    "invoice_number" VARCHAR(50),
+    "payment_method" VARCHAR(50),
+    "approved_by" UUID,
+    "receipt_url" TEXT,
+    "status" VARCHAR(20) DEFAULT 'pending',
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "expenses_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Notification" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "title" VARCHAR(255) NOT NULL,
+    "message" TEXT NOT NULL,
+    "type" VARCHAR(50) NOT NULL,
+    "is_read" BOOLEAN NOT NULL DEFAULT false,
+    "link" TEXT,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "audit_logs" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "action" VARCHAR(100) NOT NULL,
+    "entity_type" VARCHAR(50) NOT NULL,
+    "entity_id" VARCHAR(100) NOT NULL,
+    "details" JSONB,
+    "ip_address" VARCHAR(45),
+    "user_agent" TEXT,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignments" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "teacher_id" UUID NOT NULL,
+    "subject_id" UUID NOT NULL,
+    "class_id" UUID NOT NULL,
+    "stream_id" UUID,
+    "term_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "title" VARCHAR(200) NOT NULL,
+    "description" TEXT,
+    "instructions" TEXT,
+    "assignment_type" VARCHAR(50) NOT NULL,
+    "format" VARCHAR(50),
+    "publish_date" TIMESTAMPTZ(3),
+    "due_date" TIMESTAMPTZ(3) NOT NULL,
+    "allow_late_submission" BOOLEAN DEFAULT false,
+    "late_submission_deadline" TIMESTAMPTZ(3),
+    "is_timed" BOOLEAN DEFAULT false,
+    "time_limit_minutes" INTEGER,
+    "auto_submit" BOOLEAN DEFAULT true,
+    "max_score" DECIMAL(6,2) NOT NULL,
+    "pass_score" DECIMAL(6,2),
+    "weight" DECIMAL(5,2),
+    "grading_rubric" JSONB,
+    "show_rubric_to_students" BOOLEAN DEFAULT true,
+    "is_published" BOOLEAN DEFAULT false,
+    "published_at" TIMESTAMPTZ(3),
+    "is_draft" BOOLEAN DEFAULT true,
+    "group_size" INTEGER DEFAULT 1,
+    "allow_student_group_creation" BOOLEAN DEFAULT false,
+    "allow_resources" BOOLEAN DEFAULT true,
+    "max_file_size_mb" INTEGER DEFAULT 10,
+    "allowed_file_types" TEXT,
+    "status" VARCHAR(20) DEFAULT 'draft',
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assignments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_targets" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "target_type" VARCHAR(20) NOT NULL DEFAULT 'individual',
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "assignment_targets_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_groups" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "group_name" VARCHAR(100) NOT NULL,
+    "group_code" VARCHAR(20),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assignment_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_group_members" (
+    "id" UUID NOT NULL,
+    "group_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "joined_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "is_group_leader" BOOLEAN DEFAULT false,
+
+    CONSTRAINT "assignment_group_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assessment_questions" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "question_type" VARCHAR(30) NOT NULL,
+    "question_text" TEXT NOT NULL,
+    "question_order" INTEGER NOT NULL,
+    "points" DECIMAL(5,2) NOT NULL,
+    "is_required" BOOLEAN DEFAULT true,
+    "options" JSONB,
+    "correct_answer" VARCHAR(500),
+    "multiple_correct" BOOLEAN DEFAULT false,
+    "correct_answers" TEXT[],
+    "matching_pairs" JSONB,
+    "word_limit" INTEGER,
+    "expected_keywords" TEXT[],
+    "explanation" TEXT,
+    "allow_attachments" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assessment_questions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_resources" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "resource_type" VARCHAR(50) NOT NULL,
+    "title" VARCHAR(200) NOT NULL,
+    "description" TEXT,
+    "url" TEXT NOT NULL,
+    "file_name" VARCHAR(255),
+    "file_size" INTEGER,
+    "display_order" INTEGER DEFAULT 0,
+    "is_required" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "assignment_resources_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_submissions" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "group_id" UUID,
+    "submitted_by_id" UUID NOT NULL,
+    "submission_type" VARCHAR(20) NOT NULL,
+    "status" VARCHAR(20) DEFAULT 'draft',
+    "started_at" TIMESTAMPTZ(3),
+    "submitted_at" TIMESTAMPTZ(3),
+    "time_taken_minutes" INTEGER,
+    "submission_text" TEXT,
+    "word_count" INTEGER,
+    "score" DECIMAL(6,2),
+    "percentage" DECIMAL(5,2),
+    "grade" VARCHAR(10),
+    "feedback" TEXT,
+    "graded_by" UUID,
+    "graded_at" TIMESTAMPTZ(3),
+    "rubric_scores" JSONB,
+    "is_late" BOOLEAN DEFAULT false,
+    "late_minutes" INTEGER,
+    "late_penalty_applied" DECIMAL(5,2),
+    "ip_address" VARCHAR(45),
+    "user_agent" TEXT,
+    "device_info" JSONB,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assignment_submissions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_attachments" (
+    "id" UUID NOT NULL,
+    "submission_id" UUID NOT NULL,
+    "attachment_type" VARCHAR(50) NOT NULL,
+    "file_name" VARCHAR(255) NOT NULL,
+    "file_url" TEXT NOT NULL,
+    "file_size" INTEGER NOT NULL,
+    "mime_type" VARCHAR(100),
+    "thumbnail_url" TEXT,
+    "display_order" INTEGER DEFAULT 0,
+    "description" TEXT,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "assignment_attachments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assessment_answers" (
+    "id" UUID NOT NULL,
+    "submission_id" UUID NOT NULL,
+    "question_id" UUID NOT NULL,
+    "student_answer" TEXT,
+    "selected_options" TEXT[],
+    "matching_answers" JSONB,
+    "attachment_url" TEXT,
+    "attachment_name" VARCHAR(255),
+    "is_correct" BOOLEAN,
+    "points_awarded" DECIMAL(5,2),
+    "auto_feedback" TEXT,
+    "teacher_feedback" TEXT,
+    "teacher_points" DECIMAL(5,2),
+    "time_spent_seconds" INTEGER,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assessment_answers_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "peer_reviews" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "reviewer_id" UUID NOT NULL,
+    "submission_id" UUID NOT NULL,
+    "reviewee_id" UUID NOT NULL,
+    "criteria_scores" JSONB,
+    "overall_score" DECIMAL(5,2),
+    "comments" TEXT,
+    "feedback" TEXT,
+    "status" VARCHAR(20) DEFAULT 'pending',
+    "submitted_at" TIMESTAMPTZ(3),
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "peer_reviews_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_comments" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "student_id" UUID,
+    "parent_id" UUID,
+    "comment_text" TEXT NOT NULL,
+    "is_private" BOOLEAN DEFAULT false,
+    "is_read" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assignment_comments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "assignment_progress" (
+    "id" UUID NOT NULL,
+    "assignment_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "status" VARCHAR(20) DEFAULT 'not_started',
+    "last_accessed_at" TIMESTAMPTZ(3),
+    "time_spent_minutes" INTEGER DEFAULT 0,
+    "current_question" INTEGER,
+    "viewed_instructions" BOOLEAN DEFAULT false,
+    "viewed_resources" BOOLEAN DEFAULT false,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "assignment_progress_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "fee_application_logs" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "fee_structure_id" UUID NOT NULL,
+    "class_id" UUID,
+    "stream_id" UUID,
+    "term_id" UUID NOT NULL,
+    "academic_year_id" UUID NOT NULL,
+    "applied_by" UUID NOT NULL,
+    "apply_to" VARCHAR(20) NOT NULL DEFAULT 'all',
+    "total_students" INTEGER NOT NULL,
+    "successful_applications" INTEGER NOT NULL,
+    "failed_applications" INTEGER NOT NULL,
+    "skipped_applications" INTEGER NOT NULL,
+    "metadata" JSONB,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "fee_application_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "bulk_operation_logs" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "operation_type" VARCHAR(50) NOT NULL,
+    "initiated_by" UUID NOT NULL,
+    "total_items" INTEGER NOT NULL,
+    "successful_items" INTEGER NOT NULL,
+    "failed_items" INTEGER NOT NULL,
+    "skipped_items" INTEGER NOT NULL,
+    "metadata" JSONB,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "bulk_operation_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "external_transactions" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "source" VARCHAR(20) NOT NULL,
+    "reference" VARCHAR(100) NOT NULL,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "sender_name" VARCHAR(200),
+    "sender_account" VARCHAR(100),
+    "transaction_date" TIMESTAMPTZ(3) NOT NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'pending',
+    "student_id" UUID,
+    "reconciled" BOOLEAN NOT NULL DEFAULT false,
+    "reconciled_at" TIMESTAMPTZ(3),
+    "reconciled_by" UUID,
+    "notes" TEXT,
+    "disputed" BOOLEAN NOT NULL DEFAULT false,
+    "disputed_at" TIMESTAMPTZ(3),
+    "disputed_by" UUID,
+    "dispute_reason" TEXT,
+    "verified_by" VARCHAR(100),
+    "raw_data" JSONB,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "external_transactions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "verification_tokens" (
+    "id" UUID NOT NULL,
+    "userId" UUID NOT NULL,
+    "token" VARCHAR(255) NOT NULL,
+    "type" VARCHAR(50) NOT NULL,
+    "expiresAt" TIMESTAMPTZ NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "verification_tokens_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "parent_registration_requests" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "email" VARCHAR(255) NOT NULL,
+    "phone" VARCHAR(20) NOT NULL,
+    "first_name" VARCHAR(100) NOT NULL,
+    "last_name" VARCHAR(100) NOT NULL,
+    "national_id" VARCHAR(50),
+    "occupation" VARCHAR(100),
+    "student_admission_numbers" VARCHAR(50)[],
+    "student_names" VARCHAR(200)[],
+    "student_classes" VARCHAR(50)[],
+    "status" VARCHAR(20) NOT NULL DEFAULT 'pending',
+    "processed_by" UUID,
+    "processed_at" TIMESTAMPTZ(3),
+    "rejection_reason" TEXT,
+    "notes" TEXT,
+    "verification_token" VARCHAR(255),
+    "token_expires_at" TIMESTAMPTZ(3),
+    "is_email_verified" BOOLEAN DEFAULT false,
+    "email_verified_at" TIMESTAMPTZ(3),
+    "ip_address" INET,
+    "user_agent" TEXT,
+    "device_info" JSONB,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "parent_registration_requests_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "temp_students" (
+    "id" UUID NOT NULL,
+    "school_id" UUID NOT NULL,
+    "parent_request_id" UUID NOT NULL,
+    "admission_number" VARCHAR(50) NOT NULL,
+    "first_name" VARCHAR(100) NOT NULL,
+    "last_name" VARCHAR(100) NOT NULL,
+    "class_name" VARCHAR(50) NOT NULL,
+    "stream" VARCHAR(10) DEFAULT 'A',
+    "date_of_birth" DATE,
+    "gender" VARCHAR(10),
+    "is_verified" BOOLEAN DEFAULT false,
+    "verified_by" UUID,
+    "verified_at" TIMESTAMPTZ(3),
+    "verification_notes" TEXT,
+    "actual_student_id" UUID,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "temp_students_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "_RecordOfWorkToStream" (
+    "A" UUID NOT NULL,
+    "B" UUID NOT NULL
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "schools_school_code_key" ON "schools"("school_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "schools_email_key" ON "schools"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "schools_slug_key" ON "schools"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "schools_custom_domain_key" ON "schools"("custom_domain");
+
+-- CreateIndex
+CREATE INDEX "schools_is_active_idx" ON "schools"("is_active");
+
+-- CreateIndex
+CREATE INDEX "schools_subscription_tier_idx" ON "schools"("subscription_tier");
+
+-- CreateIndex
+CREATE INDEX "schools_created_at_idx" ON "schools"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "schools_email_idx" ON "schools"("email");
+
+-- CreateIndex
+CREATE INDEX "schools_school_code_idx" ON "schools"("school_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_phone_key" ON "users"("phone");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_national_id_key" ON "users"("national_id");
+
+-- CreateIndex
+CREATE INDEX "users_email_idx" ON "users"("email");
+
+-- CreateIndex
+CREATE INDEX "users_phone_idx" ON "users"("phone");
+
+-- CreateIndex
+CREATE INDEX "users_national_id_idx" ON "users"("national_id");
+
+-- CreateIndex
+CREATE INDEX "users_is_active_idx" ON "users"("is_active");
+
+-- CreateIndex
+CREATE INDEX "users_last_login_at_idx" ON "users"("last_login_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "users_created_at_idx" ON "users"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "users_first_name_last_name_idx" ON "users"("first_name", "last_name");
+
+-- CreateIndex
+CREATE INDEX "users_is_email_verified_idx" ON "users"("is_email_verified");
+
+-- CreateIndex
+CREATE INDEX "school_users_user_id_school_id_idx" ON "school_users"("user_id", "school_id");
+
+-- CreateIndex
+CREATE INDEX "school_users_school_id_role_idx" ON "school_users"("school_id", "role");
+
+-- CreateIndex
+CREATE INDEX "school_users_is_active_idx" ON "school_users"("is_active");
+
+-- CreateIndex
+CREATE INDEX "school_users_staff_id_idx" ON "school_users"("staff_id");
+
+-- CreateIndex
+CREATE INDEX "school_users_student_parent_code_idx" ON "school_users"("student_parent_code");
+
+-- CreateIndex
+CREATE INDEX "school_users_joined_at_idx" ON "school_users"("joined_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "school_users_created_at_idx" ON "school_users"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "school_users_user_id_school_id_role_key" ON "school_users"("user_id", "school_id", "role");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "user_sessions_session_token_key" ON "user_sessions"("session_token");
+
+-- CreateIndex
+CREATE INDEX "user_sessions_user_id_idx" ON "user_sessions"("user_id");
+
+-- CreateIndex
+CREATE INDEX "user_sessions_school_id_idx" ON "user_sessions"("school_id");
+
+-- CreateIndex
+CREATE INDEX "user_sessions_expires_at_idx" ON "user_sessions"("expires_at");
+
+-- CreateIndex
+CREATE INDEX "user_sessions_created_at_idx" ON "user_sessions"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "user_sessions_session_token_idx" ON "user_sessions"("session_token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "teachers_user_id_key" ON "teachers"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "teachers_teacher_code_key" ON "teachers"("teacher_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "teachers_tsc_number_key" ON "teachers"("tsc_number");
+
+-- CreateIndex
+CREATE INDEX "teachers_school_id_idx" ON "teachers"("school_id");
+
+-- CreateIndex
+CREATE INDEX "teachers_user_id_idx" ON "teachers"("user_id");
+
+-- CreateIndex
+CREATE INDEX "teachers_teacher_code_idx" ON "teachers"("teacher_code");
+
+-- CreateIndex
+CREATE INDEX "teachers_tsc_number_idx" ON "teachers"("tsc_number");
+
+-- CreateIndex
+CREATE INDEX "teachers_is_active_idx" ON "teachers"("is_active");
+
+-- CreateIndex
+CREATE INDEX "teachers_created_at_idx" ON "teachers"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "teachers_date_of_employment_idx" ON "teachers"("date_of_employment");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "parents_user_id_key" ON "parents"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "parents_parent_code_key" ON "parents"("parent_code");
+
+-- CreateIndex
+CREATE INDEX "parents_school_id_idx" ON "parents"("school_id");
+
+-- CreateIndex
+CREATE INDEX "parents_user_id_idx" ON "parents"("user_id");
+
+-- CreateIndex
+CREATE INDEX "parents_parent_code_idx" ON "parents"("parent_code");
+
+-- CreateIndex
+CREATE INDEX "parents_is_active_idx" ON "parents"("is_active");
+
+-- CreateIndex
+CREATE INDEX "parents_registration_date_idx" ON "parents"("registration_date" DESC);
+
+-- CreateIndex
+CREATE INDEX "parents_registration_status_idx" ON "parents"("registration_status");
+
+-- CreateIndex
+CREATE INDEX "parents_registration_source_idx" ON "parents"("registration_source");
+
+-- CreateIndex
+CREATE INDEX "parents_created_at_idx" ON "parents"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "parents_last_login_at_idx" ON "parents"("last_login_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "parents_terms_accepted_idx" ON "parents"("terms_accepted");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "subjects_subject_code_key" ON "subjects"("subject_code");
+
+-- CreateIndex
+CREATE INDEX "subjects_school_id_idx" ON "subjects"("school_id");
+
+-- CreateIndex
+CREATE INDEX "subjects_subject_code_idx" ON "subjects"("subject_code");
+
+-- CreateIndex
+CREATE INDEX "subjects_name_idx" ON "subjects"("name");
+
+-- CreateIndex
+CREATE INDEX "subjects_category_idx" ON "subjects"("category");
+
+-- CreateIndex
+CREATE INDEX "subjects_curriculum_id_idx" ON "subjects"("curriculum_id");
+
+-- CreateIndex
+CREATE INDEX "subjects_is_active_idx" ON "subjects"("is_active");
+
+-- CreateIndex
+CREATE INDEX "subjects_created_at_idx" ON "subjects"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "subjects_school_id_name_key" ON "subjects"("school_id", "name");
+
+-- CreateIndex
+CREATE INDEX "academic_years_school_id_idx" ON "academic_years"("school_id");
+
+-- CreateIndex
+CREATE INDEX "academic_years_year_name_idx" ON "academic_years"("year_name");
+
+-- CreateIndex
+CREATE INDEX "academic_years_is_current_idx" ON "academic_years"("is_current");
+
+-- CreateIndex
+CREATE INDEX "academic_years_start_date_idx" ON "academic_years"("start_date");
+
+-- CreateIndex
+CREATE INDEX "academic_years_end_date_idx" ON "academic_years"("end_date");
+
+-- CreateIndex
+CREATE INDEX "academic_years_created_at_idx" ON "academic_years"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "academic_years_school_id_year_name_key" ON "academic_years"("school_id", "year_name");
+
+-- CreateIndex
+CREATE INDEX "terms_school_id_idx" ON "terms"("school_id");
+
+-- CreateIndex
+CREATE INDEX "terms_academic_year_id_idx" ON "terms"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "terms_term_name_idx" ON "terms"("term_name");
+
+-- CreateIndex
+CREATE INDEX "terms_is_current_idx" ON "terms"("is_current");
+
+-- CreateIndex
+CREATE INDEX "terms_start_date_idx" ON "terms"("start_date");
+
+-- CreateIndex
+CREATE INDEX "terms_end_date_idx" ON "terms"("end_date");
+
+-- CreateIndex
+CREATE INDEX "terms_fee_deadline_idx" ON "terms"("fee_deadline");
+
+-- CreateIndex
+CREATE INDEX "terms_created_at_idx" ON "terms"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "terms_school_id_academic_year_id_term_name_key" ON "terms"("school_id", "academic_year_id", "term_name");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_teacher_id_idx" ON "teacher_assignments"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_stream_id_idx" ON "teacher_assignments"("stream_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_academic_year_id_idx" ON "teacher_assignments"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_term_id_idx" ON "teacher_assignments"("term_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_is_active_idx" ON "teacher_assignments"("is_active");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_assigned_at_idx" ON "teacher_assignments"("assigned_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "teacher_assignments_created_at_idx" ON "teacher_assignments"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "teacher_assignments_teacher_id_stream_id_academic_year_id_t_key" ON "teacher_assignments"("teacher_id", "stream_id", "academic_year_id", "term_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignment_subjects_teacher_assignment_id_idx" ON "teacher_assignment_subjects"("teacher_assignment_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignment_subjects_subject_id_idx" ON "teacher_assignment_subjects"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "teacher_assignment_subjects_created_at_idx" ON "teacher_assignment_subjects"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "teacher_assignment_subjects_teacher_assignment_id_subject_i_key" ON "teacher_assignment_subjects"("teacher_assignment_id", "subject_id");
+
+-- CreateIndex
+CREATE INDEX "classes_school_id_idx" ON "classes"("school_id");
+
+-- CreateIndex
+CREATE INDEX "classes_class_name_idx" ON "classes"("class_name");
+
+-- CreateIndex
+CREATE INDEX "classes_class_level_idx" ON "classes"("class_level");
+
+-- CreateIndex
+CREATE INDEX "classes_created_at_idx" ON "classes"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "classes_school_id_class_name_key" ON "classes"("school_id", "class_name");
+
+-- CreateIndex
+CREATE INDEX "streams_school_id_idx" ON "streams"("school_id");
+
+-- CreateIndex
+CREATE INDEX "streams_class_id_idx" ON "streams"("class_id");
+
+-- CreateIndex
+CREATE INDEX "streams_name_idx" ON "streams"("name");
+
+-- CreateIndex
+CREATE INDEX "streams_created_at_idx" ON "streams"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "streams_school_id_class_id_name_key" ON "streams"("school_id", "class_id", "name");
+
+-- CreateIndex
+CREATE INDEX "students_school_id_idx" ON "students"("school_id");
+
+-- CreateIndex
+CREATE INDEX "students_admission_number_idx" ON "students"("admission_number");
+
+-- CreateIndex
+CREATE INDEX "students_class_id_idx" ON "students"("class_id");
+
+-- CreateIndex
+CREATE INDEX "students_stream_id_idx" ON "students"("stream_id");
+
+-- CreateIndex
+CREATE INDEX "students_first_name_last_name_idx" ON "students"("first_name", "last_name");
+
+-- CreateIndex
+CREATE INDEX "students_student_type_idx" ON "students"("student_type");
+
+-- CreateIndex
+CREATE INDEX "students_is_active_idx" ON "students"("is_active");
+
+-- CreateIndex
+CREATE INDEX "students_enrollment_date_idx" ON "students"("enrollment_date" DESC);
+
+-- CreateIndex
+CREATE INDEX "students_created_at_idx" ON "students"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "students_guardian_phone_idx" ON "students"("guardian_phone");
+
+-- CreateIndex
+CREATE INDEX "students_guardian_email_idx" ON "students"("guardian_email");
+
+-- CreateIndex
+CREATE INDEX "students_academic_year_idx" ON "students"("academic_year");
+
+-- CreateIndex
+CREATE INDEX "students_class_name_idx" ON "students"("class_name");
+
+-- CreateIndex
+CREATE INDEX "students_stream_name_idx" ON "students"("stream_name");
+
+-- CreateIndex
+CREATE INDEX "students_guardian_user_id_idx" ON "students"("guardian_user_id");
+
+-- CreateIndex
+CREATE INDEX "students_primary_parent_id_idx" ON "students"("primary_parent_id");
+
+-- CreateIndex
+CREATE INDEX "students_registration_source_idx" ON "students"("registration_source");
+
+-- CreateIndex
+CREATE INDEX "students_registration_verified_idx" ON "students"("registration_verified");
+
+-- CreateIndex
+CREATE INDEX "students_student_status_idx" ON "students"("student_status");
+
+-- CreateIndex
+CREATE INDEX "students_registration_date_idx" ON "students"("registration_date" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "students_school_id_admission_number_key" ON "students"("school_id", "admission_number");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_school_id_idx" ON "student_fee_assignments"("school_id");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_student_id_idx" ON "student_fee_assignments"("student_id");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_fee_structure_id_idx" ON "student_fee_assignments"("fee_structure_id");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_academic_year_id_idx" ON "student_fee_assignments"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_term_id_idx" ON "student_fee_assignments"("term_id");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_is_active_idx" ON "student_fee_assignments"("is_active");
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_assigned_at_idx" ON "student_fee_assignments"("assigned_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "student_fee_assignments_assigned_by_idx" ON "student_fee_assignments"("assigned_by");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "student_fee_assignments_student_id_academic_year_id_term_id_key" ON "student_fee_assignments"("student_id", "academic_year_id", "term_id");
+
+-- CreateIndex
+CREATE INDEX "student_parents_student_id_idx" ON "student_parents"("student_id");
+
+-- CreateIndex
+CREATE INDEX "student_parents_parent_id_idx" ON "student_parents"("parent_id");
+
+-- CreateIndex
+CREATE INDEX "student_parents_is_primary_contact_idx" ON "student_parents"("is_primary_contact");
+
+-- CreateIndex
+CREATE INDEX "student_parents_relationship_idx" ON "student_parents"("relationship");
+
+-- CreateIndex
+CREATE INDEX "student_parents_verified_by_admin_idx" ON "student_parents"("verified_by_admin");
+
+-- CreateIndex
+CREATE INDEX "student_parents_contact_priority_idx" ON "student_parents"("contact_priority");
+
+-- CreateIndex
+CREATE INDEX "student_parents_created_at_idx" ON "student_parents"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "student_parents_student_id_parent_id_key" ON "student_parents"("student_id", "parent_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_student_id_idx" ON "student_subjects"("student_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_subject_id_idx" ON "student_subjects"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_class_id_idx" ON "student_subjects"("class_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_academic_year_id_idx" ON "student_subjects"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_term_id_idx" ON "student_subjects"("term_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_curriculum_id_idx" ON "student_subjects"("curriculum_id");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_status_idx" ON "student_subjects"("status");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_enrollment_date_idx" ON "student_subjects"("enrollment_date");
+
+-- CreateIndex
+CREATE INDEX "student_subjects_created_at_idx" ON "student_subjects"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "student_subjects_is_elective_idx" ON "student_subjects"("is_elective");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "student_subjects_student_id_subject_id_term_id_key" ON "student_subjects"("student_id", "subject_id", "term_id");
+
+-- CreateIndex
+CREATE INDEX "cbc_strands_school_id_idx" ON "cbc_strands"("school_id");
+
+-- CreateIndex
+CREATE INDEX "cbc_strands_curriculum_id_idx" ON "cbc_strands"("curriculum_id");
+
+-- CreateIndex
+CREATE INDEX "cbc_strands_subject_id_idx" ON "cbc_strands"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "cbc_strands_code_idx" ON "cbc_strands"("code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cbc_strands_school_id_curriculum_id_subject_id_code_key" ON "cbc_strands"("school_id", "curriculum_id", "subject_id", "code");
+
+-- CreateIndex
+CREATE INDEX "cbc_sub_strands_strand_id_idx" ON "cbc_sub_strands"("strand_id");
+
+-- CreateIndex
+CREATE INDEX "cbc_sub_strands_code_idx" ON "cbc_sub_strands"("code");
+
+-- CreateIndex
+CREATE INDEX "cbc_sub_strands_order_idx" ON "cbc_sub_strands"("order");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cbc_sub_strands_strand_id_code_key" ON "cbc_sub_strands"("strand_id", "code");
+
+-- CreateIndex
+CREATE INDEX "student_scores_student_id_idx" ON "student_scores"("student_id");
+
+-- CreateIndex
+CREATE INDEX "student_scores_subject_id_idx" ON "student_scores"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "student_scores_assessment_id_idx" ON "student_scores"("assessment_id");
+
+-- CreateIndex
+CREATE INDEX "student_scores_grading_system_id_idx" ON "student_scores"("grading_system_id");
+
+-- CreateIndex
+CREATE INDEX "student_scores_curriculum_id_idx" ON "student_scores"("curriculum_id");
+
+-- CreateIndex
+CREATE INDEX "student_scores_graded_at_idx" ON "student_scores"("graded_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "student_scores_score_idx" ON "student_scores"("score");
+
+-- CreateIndex
+CREATE INDEX "student_scores_grade_idx" ON "student_scores"("grade");
+
+-- CreateIndex
+CREATE INDEX "student_scores_points_idx" ON "student_scores"("points");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "student_scores_student_id_assessment_id_key" ON "student_scores"("student_id", "assessment_id");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_school_id_idx" ON "grading_systems"("school_id");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_curriculum_id_idx" ON "grading_systems"("curriculum_id");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_subject_id_idx" ON "grading_systems"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_type_idx" ON "grading_systems"("type");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_applies_to_class_id_idx" ON "grading_systems"("applies_to_class_id");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_applies_to_stream_id_idx" ON "grading_systems"("applies_to_stream_id");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_applies_to_student_type_idx" ON "grading_systems"("applies_to_student_type");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_is_default_idx" ON "grading_systems"("is_default");
+
+-- CreateIndex
+CREATE INDEX "grading_systems_created_at_idx" ON "grading_systems"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "grading_systems_school_id_type_curriculum_id_subject_id_app_key" ON "grading_systems"("school_id", "type", "curriculum_id", "subject_id", "applies_to_class_id", "applies_to_stream_id", "is_default");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "curricula_code_key" ON "curricula"("code");
+
+-- CreateIndex
+CREATE INDEX "curricula_school_id_idx" ON "curricula"("school_id");
+
+-- CreateIndex
+CREATE INDEX "curricula_code_idx" ON "curricula"("code");
+
+-- CreateIndex
+CREATE INDEX "curricula_is_active_idx" ON "curricula"("is_active");
+
+-- CreateIndex
+CREATE INDEX "curricula_created_at_idx" ON "curricula"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "curricula_school_id_code_key" ON "curricula"("school_id", "code");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_grading_system_id_idx" ON "grading_scales"("grading_system_id");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_grade_idx" ON "grading_scales"("grade");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_min_score_idx" ON "grading_scales"("min_score");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_max_score_idx" ON "grading_scales"("max_score");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_points_idx" ON "grading_scales"("points");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_display_order_idx" ON "grading_scales"("display_order");
+
+-- CreateIndex
+CREATE INDEX "grading_scales_is_passing_idx" ON "grading_scales"("is_passing");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "grading_scales_grading_system_id_grade_key" ON "grading_scales"("grading_system_id", "grade");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_teacher_id_sent_at_idx" ON "parent_messages"("teacher_id", "sent_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "parent_messages_parent_id_student_id_idx" ON "parent_messages"("parent_id", "student_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_student_id_term_id_idx" ON "parent_messages"("student_id", "term_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_teacher_id_idx" ON "parent_messages"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_parent_id_idx" ON "parent_messages"("parent_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_student_id_idx" ON "parent_messages"("student_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_subject_id_idx" ON "parent_messages"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_term_id_idx" ON "parent_messages"("term_id");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_channel_idx" ON "parent_messages"("channel");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_is_read_idx" ON "parent_messages"("is_read");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_status_idx" ON "parent_messages"("status");
+
+-- CreateIndex
+CREATE INDEX "parent_messages_created_at_idx" ON "parent_messages"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "parent_messages_sent_at_idx" ON "parent_messages"("sent_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_school_id_idx" ON "schemes_of_work"("school_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_teacher_id_idx" ON "schemes_of_work"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_subject_id_idx" ON "schemes_of_work"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_class_id_idx" ON "schemes_of_work"("class_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_academic_year_id_idx" ON "schemes_of_work"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_term_id_idx" ON "schemes_of_work"("term_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_stream_id_idx" ON "schemes_of_work"("stream_id");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_status_idx" ON "schemes_of_work"("status");
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_submitted_at_idx" ON "schemes_of_work"("submitted_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "schemes_of_work_created_at_idx" ON "schemes_of_work"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_scheme_of_work_id_week_number_idx" ON "scheme_topics"("scheme_of_work_id", "week_number");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_scheme_of_work_id_idx" ON "scheme_topics"("scheme_of_work_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_school_id_idx" ON "scheme_topics"("school_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_week_number_idx" ON "scheme_topics"("week_number");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_lesson_number_idx" ON "scheme_topics"("lesson_number");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_cbc_strand_id_idx" ON "scheme_topics"("cbc_strand_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_cbc_sub_strand_id_idx" ON "scheme_topics"("cbc_sub_strand_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_display_order_idx" ON "scheme_topics"("display_order");
+
+-- CreateIndex
+CREATE INDEX "scheme_topics_created_at_idx" ON "scheme_topics"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_scheme_of_work_id_idx" ON "scheme_approvals"("scheme_of_work_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_school_id_idx" ON "scheme_approvals"("school_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_approver_id_idx" ON "scheme_approvals"("approver_id");
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_approval_status_idx" ON "scheme_approvals"("approval_status");
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_revision_requested_idx" ON "scheme_approvals"("revision_requested");
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_approved_at_idx" ON "scheme_approvals"("approved_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "scheme_approvals_created_at_idx" ON "scheme_approvals"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "records_of_work_school_id_idx" ON "records_of_work"("school_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_teacher_id_idx" ON "records_of_work"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_subject_id_idx" ON "records_of_work"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_class_id_idx" ON "records_of_work"("class_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_term_id_idx" ON "records_of_work"("term_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_week_number_idx" ON "records_of_work"("week_number");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_lesson_date_idx" ON "records_of_work"("lesson_date");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_status_idx" ON "records_of_work"("status");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_scheme_of_work_id_idx" ON "records_of_work"("scheme_of_work_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_scheme_topic_id_idx" ON "records_of_work"("scheme_topic_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_verified_by_id_idx" ON "records_of_work"("verified_by_id");
+
+-- CreateIndex
+CREATE INDEX "records_of_work_created_at_idx" ON "records_of_work"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "record_attachments_record_of_work_id_idx" ON "record_attachments"("record_of_work_id");
+
+-- CreateIndex
+CREATE INDEX "record_attachments_school_id_idx" ON "record_attachments"("school_id");
+
+-- CreateIndex
+CREATE INDEX "record_attachments_attachment_type_idx" ON "record_attachments"("attachment_type");
+
+-- CreateIndex
+CREATE INDEX "record_attachments_uploaded_by_idx" ON "record_attachments"("uploaded_by");
+
+-- CreateIndex
+CREATE INDEX "record_attachments_uploaded_at_idx" ON "record_attachments"("uploaded_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_school_id_idx" ON "lesson_plans"("school_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_teacher_id_idx" ON "lesson_plans"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_subject_id_idx" ON "lesson_plans"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_class_id_idx" ON "lesson_plans"("class_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_lesson_date_idx" ON "lesson_plans"("lesson_date");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_scheme_topic_id_idx" ON "lesson_plans"("scheme_topic_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_status_idx" ON "lesson_plans"("status");
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_completed_at_idx" ON "lesson_plans"("completed_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "lesson_plans_created_at_idx" ON "lesson_plans"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_school_id_idx" ON "lesson_plan_templates"("school_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_teacher_id_idx" ON "lesson_plan_templates"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_subject_id_idx" ON "lesson_plan_templates"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_class_id_idx" ON "lesson_plan_templates"("class_id");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_template_name_idx" ON "lesson_plan_templates"("template_name");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_is_shared_idx" ON "lesson_plan_templates"("is_shared");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_shared_with_department_idx" ON "lesson_plan_templates"("shared_with_department");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_shared_with_school_idx" ON "lesson_plan_templates"("shared_with_school");
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_last_used_at_idx" ON "lesson_plan_templates"("last_used_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "lesson_plan_templates_created_at_idx" ON "lesson_plan_templates"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "attendance_class_id_attendance_date_idx" ON "attendance"("class_id", "attendance_date");
+
+-- CreateIndex
+CREATE INDEX "attendance_teacher_id_attendance_date_idx" ON "attendance"("teacher_id", "attendance_date");
+
+-- CreateIndex
+CREATE INDEX "attendance_student_id_idx" ON "attendance"("student_id");
+
+-- CreateIndex
+CREATE INDEX "attendance_class_id_idx" ON "attendance"("class_id");
+
+-- CreateIndex
+CREATE INDEX "attendance_teacher_id_idx" ON "attendance"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "attendance_school_id_idx" ON "attendance"("school_id");
+
+-- CreateIndex
+CREATE INDEX "attendance_subject_id_idx" ON "attendance"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "attendance_attendance_date_idx" ON "attendance"("attendance_date");
+
+-- CreateIndex
+CREATE INDEX "attendance_status_idx" ON "attendance"("status");
+
+-- CreateIndex
+CREATE INDEX "attendance_created_at_idx" ON "attendance"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "attendance_student_id_attendance_date_key" ON "attendance"("student_id", "attendance_date");
+
+-- CreateIndex
+CREATE INDEX "assessments_school_id_idx" ON "assessments"("school_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_subject_id_idx" ON "assessments"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_term_id_idx" ON "assessments"("term_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_academic_year_id_idx" ON "assessments"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_teacher_assignment_id_idx" ON "assessments"("teacher_assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_student_subject_id_idx" ON "assessments"("student_subject_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_class_id_idx" ON "assessments"("class_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_stream_id_idx" ON "assessments"("stream_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_created_by_idx" ON "assessments"("created_by");
+
+-- CreateIndex
+CREATE INDEX "assessments_curriculum_id_idx" ON "assessments"("curriculum_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_grading_system_id_idx" ON "assessments"("grading_system_id");
+
+-- CreateIndex
+CREATE INDEX "assessments_type_idx" ON "assessments"("type");
+
+-- CreateIndex
+CREATE INDEX "assessments_due_date_idx" ON "assessments"("due_date");
+
+-- CreateIndex
+CREATE INDEX "assessments_is_published_idx" ON "assessments"("is_published");
+
+-- CreateIndex
+CREATE INDEX "assessments_published_at_idx" ON "assessments"("published_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assessments_created_at_idx" ON "assessments"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "fee_structures_school_id_idx" ON "fee_structures"("school_id");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_academic_year_id_idx" ON "fee_structures"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_class_id_idx" ON "fee_structures"("class_id");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_student_type_idx" ON "fee_structures"("student_type");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_applies_to_all_terms_idx" ON "fee_structures"("applies_to_all_terms");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_is_active_idx" ON "fee_structures"("is_active");
+
+-- CreateIndex
+CREATE INDEX "fee_structures_created_at_idx" ON "fee_structures"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_structures_school_id_structure_name_academic_year_id_key" ON "fee_structures"("school_id", "structure_name", "academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_student_id_idx" ON "fee_statements"("student_id");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_academic_year_id_idx" ON "fee_statements"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_term_id_idx" ON "fee_statements"("term_id");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_statement_date_idx" ON "fee_statements"("statement_date");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_is_published_idx" ON "fee_statements"("is_published");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_sent_to_parent_idx" ON "fee_statements"("sent_to_parent");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_parent_viewed_idx" ON "fee_statements"("parent_viewed");
+
+-- CreateIndex
+CREATE INDEX "fee_statements_published_at_idx" ON "fee_statements"("published_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "fee_statements_created_at_idx" ON "fee_statements"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "fee_statement_items_fee_statement_id_idx" ON "fee_statement_items"("fee_statement_id");
+
+-- CreateIndex
+CREATE INDEX "fee_statement_items_item_type_idx" ON "fee_statement_items"("item_type");
+
+-- CreateIndex
+CREATE INDEX "fee_statement_items_item_date_idx" ON "fee_statement_items"("item_date");
+
+-- CreateIndex
+CREATE INDEX "fee_statement_items_reference_number_idx" ON "fee_statement_items"("reference_number");
+
+-- CreateIndex
+CREATE INDEX "fee_statement_items_created_at_idx" ON "fee_statement_items"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "fee_items_fee_structure_id_idx" ON "fee_items"("fee_structure_id");
+
+-- CreateIndex
+CREATE INDEX "fee_items_subject_id_idx" ON "fee_items"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "fee_items_item_name_idx" ON "fee_items"("item_name");
+
+-- CreateIndex
+CREATE INDEX "fee_items_is_compulsory_idx" ON "fee_items"("is_compulsory");
+
+-- CreateIndex
+CREATE INDEX "fee_items_can_be_paid_in_installments_idx" ON "fee_items"("can_be_paid_in_installments");
+
+-- CreateIndex
+CREATE INDEX "fee_items_created_at_idx" ON "fee_items"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "fee_items_fee_structure_id_item_name_key" ON "fee_items"("fee_structure_id", "item_name");
+
+-- CreateIndex
+CREATE INDEX "term_fee_items_fee_item_id_idx" ON "term_fee_items"("fee_item_id");
+
+-- CreateIndex
+CREATE INDEX "term_fee_items_term_id_idx" ON "term_fee_items"("term_id");
+
+-- CreateIndex
+CREATE INDEX "term_fee_items_amount_idx" ON "term_fee_items"("amount");
+
+-- CreateIndex
+CREATE INDEX "term_fee_items_due_date_idx" ON "term_fee_items"("due_date");
+
+-- CreateIndex
+CREATE INDEX "term_fee_items_is_active_idx" ON "term_fee_items"("is_active");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "term_fee_items_fee_item_id_term_id_key" ON "term_fee_items"("fee_item_id", "term_id");
+
+-- CreateIndex
+CREATE INDEX "term_fee_structures_fee_structure_id_idx" ON "term_fee_structures"("fee_structure_id");
+
+-- CreateIndex
+CREATE INDEX "term_fee_structures_term_id_idx" ON "term_fee_structures"("term_id");
+
+-- CreateIndex
+CREATE INDEX "term_fee_structures_is_active_idx" ON "term_fee_structures"("is_active");
+
+-- CreateIndex
+CREATE INDEX "term_fee_structures_effective_date_idx" ON "term_fee_structures"("effective_date");
+
+-- CreateIndex
+CREATE INDEX "term_fee_structures_expiry_date_idx" ON "term_fee_structures"("expiry_date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "term_fee_structures_fee_structure_id_term_id_key" ON "term_fee_structures"("fee_structure_id", "term_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "invoices_invoice_number_key" ON "invoices"("invoice_number");
+
+-- CreateIndex
+CREATE INDEX "invoices_student_id_idx" ON "invoices"("student_id");
+
+-- CreateIndex
+CREATE INDEX "invoices_academic_year_id_idx" ON "invoices"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "invoices_term_id_idx" ON "invoices"("term_id");
+
+-- CreateIndex
+CREATE INDEX "invoices_fee_structure_id_idx" ON "invoices"("fee_structure_id");
+
+-- CreateIndex
+CREATE INDEX "invoices_student_fee_assignment_id_idx" ON "invoices"("student_fee_assignment_id");
+
+-- CreateIndex
+CREATE INDEX "invoices_invoice_number_idx" ON "invoices"("invoice_number");
+
+-- CreateIndex
+CREATE INDEX "invoices_due_date_idx" ON "invoices"("due_date");
+
+-- CreateIndex
+CREATE INDEX "invoices_invoice_date_idx" ON "invoices"("invoice_date");
+
+-- CreateIndex
+CREATE INDEX "invoices_status_idx" ON "invoices"("status");
+
+-- CreateIndex
+CREATE INDEX "invoices_late_fee_applied_idx" ON "invoices"("late_fee_applied");
+
+-- CreateIndex
+CREATE INDEX "invoices_cancelled_at_idx" ON "invoices"("cancelled_at");
+
+-- CreateIndex
+CREATE INDEX "invoices_created_at_idx" ON "invoices"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "invoices_total_amount_idx" ON "invoices"("total_amount");
+
+-- CreateIndex
+CREATE INDEX "invoices_balance_idx" ON "invoices"("balance");
+
+-- CreateIndex
+CREATE INDEX "invoices_amount_paid_idx" ON "invoices"("amount_paid");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_invoice_id_idx" ON "invoice_items"("invoice_id");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_fee_item_id_idx" ON "invoice_items"("fee_item_id");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_term_fee_item_id_idx" ON "invoice_items"("term_fee_item_id");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_subject_id_idx" ON "invoice_items"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_item_name_idx" ON "invoice_items"("item_name");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_total_amount_idx" ON "invoice_items"("total_amount");
+
+-- CreateIndex
+CREATE INDEX "invoice_items_created_at_idx" ON "invoice_items"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "payments_payment_reference_key" ON "payments"("payment_reference");
+
+-- CreateIndex
+CREATE INDEX "payments_invoice_id_idx" ON "payments"("invoice_id");
+
+-- CreateIndex
+CREATE INDEX "payments_student_id_idx" ON "payments"("student_id");
+
+-- CreateIndex
+CREATE INDEX "payments_payment_reference_idx" ON "payments"("payment_reference");
+
+-- CreateIndex
+CREATE INDEX "payments_transaction_id_idx" ON "payments"("transaction_id");
+
+-- CreateIndex
+CREATE INDEX "payments_payment_method_idx" ON "payments"("payment_method");
+
+-- CreateIndex
+CREATE INDEX "payments_status_idx" ON "payments"("status");
+
+-- CreateIndex
+CREATE INDEX "payments_verified_by_idx" ON "payments"("verified_by");
+
+-- CreateIndex
+CREATE INDEX "payments_verified_at_idx" ON "payments"("verified_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "payments_reconciled_at_idx" ON "payments"("reconciled_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "payments_reconciled_by_idx" ON "payments"("reconciled_by");
+
+-- CreateIndex
+CREATE INDEX "payments_created_at_idx" ON "payments"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "payments_amount_idx" ON "payments"("amount");
+
+-- CreateIndex
+CREATE INDEX "payments_payer_phone_idx" ON "payments"("payer_phone");
+
+-- CreateIndex
+CREATE INDEX "payments_payer_email_idx" ON "payments"("payer_email");
+
+-- CreateIndex
+CREATE INDEX "payments_receipt_number_idx" ON "payments"("receipt_number");
+
+-- CreateIndex
+CREATE INDEX "payments_mpesa_receipt_idx" ON "payments"("mpesa_receipt");
+
+-- CreateIndex
+CREATE INDEX "payment_methods_school_id_idx" ON "payment_methods"("school_id");
+
+-- CreateIndex
+CREATE INDEX "payment_methods_method_name_idx" ON "payment_methods"("method_name");
+
+-- CreateIndex
+CREATE INDEX "payment_methods_is_active_idx" ON "payment_methods"("is_active");
+
+-- CreateIndex
+CREATE INDEX "payment_methods_created_at_idx" ON "payment_methods"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "payment_methods_school_id_method_name_key" ON "payment_methods"("school_id", "method_name");
+
+-- CreateIndex
+CREATE INDEX "late_fee_configs_school_id_idx" ON "late_fee_configs"("school_id");
+
+-- CreateIndex
+CREATE INDEX "late_fee_configs_name_idx" ON "late_fee_configs"("name");
+
+-- CreateIndex
+CREATE INDEX "late_fee_configs_is_active_idx" ON "late_fee_configs"("is_active");
+
+-- CreateIndex
+CREATE INDEX "late_fee_configs_late_fee_type_idx" ON "late_fee_configs"("late_fee_type");
+
+-- CreateIndex
+CREATE INDEX "late_fee_configs_created_at_idx" ON "late_fee_configs"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "late_fee_configs_school_id_name_key" ON "late_fee_configs"("school_id", "name");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_school_id_idx" ON "fee_waivers"("school_id");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_student_id_idx" ON "fee_waivers"("student_id");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_academic_year_id_idx" ON "fee_waivers"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_term_id_idx" ON "fee_waivers"("term_id");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_waiver_type_idx" ON "fee_waivers"("waiver_type");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_waiver_amount_idx" ON "fee_waivers"("waiver_amount");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_approved_by_idx" ON "fee_waivers"("approved_by");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_approved_at_idx" ON "fee_waivers"("approved_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_is_active_idx" ON "fee_waivers"("is_active");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_start_date_idx" ON "fee_waivers"("start_date");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_end_date_idx" ON "fee_waivers"("end_date");
+
+-- CreateIndex
+CREATE INDEX "fee_waivers_created_at_idx" ON "fee_waivers"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "payment_installments_payment_id_idx" ON "payment_installments"("payment_id");
+
+-- CreateIndex
+CREATE INDEX "payment_installments_installment_number_idx" ON "payment_installments"("installment_number");
+
+-- CreateIndex
+CREATE INDEX "payment_installments_due_date_idx" ON "payment_installments"("due_date");
+
+-- CreateIndex
+CREATE INDEX "payment_installments_paid_date_idx" ON "payment_installments"("paid_date");
+
+-- CreateIndex
+CREATE INDEX "payment_installments_status_idx" ON "payment_installments"("status");
+
+-- CreateIndex
+CREATE INDEX "payment_installments_late_fee_applied_idx" ON "payment_installments"("late_fee_applied");
+
+-- CreateIndex
+CREATE INDEX "payment_installments_created_at_idx" ON "payment_installments"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "payment_installments_payment_id_installment_number_key" ON "payment_installments"("payment_id", "installment_number");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_school_id_idx" ON "financial_reports"("school_id");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_report_type_idx" ON "financial_reports"("report_type");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_report_period_idx" ON "financial_reports"("report_period");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_start_date_idx" ON "financial_reports"("start_date");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_end_date_idx" ON "financial_reports"("end_date");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_generated_by_idx" ON "financial_reports"("generated_by");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_is_published_idx" ON "financial_reports"("is_published");
+
+-- CreateIndex
+CREATE INDEX "financial_reports_published_at_idx" ON "financial_reports"("published_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "financial_reports_created_at_idx" ON "financial_reports"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "refund_requests_refund_reference_key" ON "refund_requests"("refund_reference");
+
+-- CreateIndex
+CREATE INDEX "refund_requests_school_id_idx" ON "refund_requests"("school_id");
+
+-- CreateIndex
+CREATE INDEX "refund_requests_student_id_idx" ON "refund_requests"("student_id");
+
+-- CreateIndex
+CREATE INDEX "refund_requests_invoice_id_idx" ON "refund_requests"("invoice_id");
+
+-- CreateIndex
+CREATE INDEX "refund_requests_status_idx" ON "refund_requests"("status");
+
+-- CreateIndex
+CREATE INDEX "refund_requests_requested_at_idx" ON "refund_requests"("requested_at");
+
+-- CreateIndex
+CREATE INDEX "refund_requests_refund_reference_idx" ON "refund_requests"("refund_reference");
+
+-- CreateIndex
+CREATE INDEX "expenses_school_id_idx" ON "expenses"("school_id");
+
+-- CreateIndex
+CREATE INDEX "expenses_expense_date_idx" ON "expenses"("expense_date");
+
+-- CreateIndex
+CREATE INDEX "expenses_category_idx" ON "expenses"("category");
+
+-- CreateIndex
+CREATE INDEX "expenses_amount_idx" ON "expenses"("amount");
+
+-- CreateIndex
+CREATE INDEX "expenses_vendor_name_idx" ON "expenses"("vendor_name");
+
+-- CreateIndex
+CREATE INDEX "expenses_invoice_number_idx" ON "expenses"("invoice_number");
+
+-- CreateIndex
+CREATE INDEX "expenses_approved_by_idx" ON "expenses"("approved_by");
+
+-- CreateIndex
+CREATE INDEX "expenses_status_idx" ON "expenses"("status");
+
+-- CreateIndex
+CREATE INDEX "expenses_created_at_idx" ON "expenses"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "Notification_user_id_is_read_idx" ON "Notification"("user_id", "is_read");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_school_id_idx" ON "audit_logs"("school_id");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_user_id_idx" ON "audit_logs"("user_id");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_entity_type_entity_id_idx" ON "audit_logs"("entity_type", "entity_id");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_action_idx" ON "audit_logs"("action");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_created_at_idx" ON "audit_logs"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignments_school_id_idx" ON "assignments"("school_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_teacher_id_idx" ON "assignments"("teacher_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_subject_id_idx" ON "assignments"("subject_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_class_id_idx" ON "assignments"("class_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_stream_id_idx" ON "assignments"("stream_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_term_id_idx" ON "assignments"("term_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_academic_year_id_idx" ON "assignments"("academic_year_id");
+
+-- CreateIndex
+CREATE INDEX "assignments_assignment_type_idx" ON "assignments"("assignment_type");
+
+-- CreateIndex
+CREATE INDEX "assignments_format_idx" ON "assignments"("format");
+
+-- CreateIndex
+CREATE INDEX "assignments_due_date_idx" ON "assignments"("due_date");
+
+-- CreateIndex
+CREATE INDEX "assignments_publish_date_idx" ON "assignments"("publish_date");
+
+-- CreateIndex
+CREATE INDEX "assignments_is_published_idx" ON "assignments"("is_published");
+
+-- CreateIndex
+CREATE INDEX "assignments_status_idx" ON "assignments"("status");
+
+-- CreateIndex
+CREATE INDEX "assignments_is_timed_idx" ON "assignments"("is_timed");
+
+-- CreateIndex
+CREATE INDEX "assignments_created_at_idx" ON "assignments"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignments_published_at_idx" ON "assignments"("published_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignment_targets_assignment_id_idx" ON "assignment_targets"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_targets_student_id_idx" ON "assignment_targets"("student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_targets_target_type_idx" ON "assignment_targets"("target_type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assignment_targets_assignment_id_student_id_key" ON "assignment_targets"("assignment_id", "student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_groups_assignment_id_idx" ON "assignment_groups"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_groups_group_code_idx" ON "assignment_groups"("group_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assignment_groups_assignment_id_group_name_key" ON "assignment_groups"("assignment_id", "group_name");
+
+-- CreateIndex
+CREATE INDEX "assignment_group_members_group_id_idx" ON "assignment_group_members"("group_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_group_members_student_id_idx" ON "assignment_group_members"("student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_group_members_is_group_leader_idx" ON "assignment_group_members"("is_group_leader");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assignment_group_members_group_id_student_id_key" ON "assignment_group_members"("group_id", "student_id");
+
+-- CreateIndex
+CREATE INDEX "assessment_questions_assignment_id_idx" ON "assessment_questions"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assessment_questions_question_order_idx" ON "assessment_questions"("question_order");
+
+-- CreateIndex
+CREATE INDEX "assessment_questions_question_type_idx" ON "assessment_questions"("question_type");
+
+-- CreateIndex
+CREATE INDEX "assessment_questions_created_at_idx" ON "assessment_questions"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignment_resources_assignment_id_idx" ON "assignment_resources"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_resources_resource_type_idx" ON "assignment_resources"("resource_type");
+
+-- CreateIndex
+CREATE INDEX "assignment_resources_display_order_idx" ON "assignment_resources"("display_order");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_assignment_id_idx" ON "assignment_submissions"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_student_id_idx" ON "assignment_submissions"("student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_group_id_idx" ON "assignment_submissions"("group_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_submitted_by_id_idx" ON "assignment_submissions"("submitted_by_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_status_idx" ON "assignment_submissions"("status");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_submitted_at_idx" ON "assignment_submissions"("submitted_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_graded_at_idx" ON "assignment_submissions"("graded_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_is_late_idx" ON "assignment_submissions"("is_late");
+
+-- CreateIndex
+CREATE INDEX "assignment_submissions_created_at_idx" ON "assignment_submissions"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assignment_submissions_assignment_id_student_id_key" ON "assignment_submissions"("assignment_id", "student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_attachments_submission_id_idx" ON "assignment_attachments"("submission_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_attachments_attachment_type_idx" ON "assignment_attachments"("attachment_type");
+
+-- CreateIndex
+CREATE INDEX "assignment_attachments_display_order_idx" ON "assignment_attachments"("display_order");
+
+-- CreateIndex
+CREATE INDEX "assessment_answers_submission_id_idx" ON "assessment_answers"("submission_id");
+
+-- CreateIndex
+CREATE INDEX "assessment_answers_question_id_idx" ON "assessment_answers"("question_id");
+
+-- CreateIndex
+CREATE INDEX "assessment_answers_is_correct_idx" ON "assessment_answers"("is_correct");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assessment_answers_submission_id_question_id_key" ON "assessment_answers"("submission_id", "question_id");
+
+-- CreateIndex
+CREATE INDEX "peer_reviews_assignment_id_idx" ON "peer_reviews"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "peer_reviews_reviewer_id_idx" ON "peer_reviews"("reviewer_id");
+
+-- CreateIndex
+CREATE INDEX "peer_reviews_submission_id_idx" ON "peer_reviews"("submission_id");
+
+-- CreateIndex
+CREATE INDEX "peer_reviews_reviewee_id_idx" ON "peer_reviews"("reviewee_id");
+
+-- CreateIndex
+CREATE INDEX "peer_reviews_status_idx" ON "peer_reviews"("status");
+
+-- CreateIndex
+CREATE INDEX "peer_reviews_submitted_at_idx" ON "peer_reviews"("submitted_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "peer_reviews_reviewer_id_submission_id_key" ON "peer_reviews"("reviewer_id", "submission_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_comments_assignment_id_idx" ON "assignment_comments"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_comments_user_id_idx" ON "assignment_comments"("user_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_comments_student_id_idx" ON "assignment_comments"("student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_comments_parent_id_idx" ON "assignment_comments"("parent_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_comments_is_private_idx" ON "assignment_comments"("is_private");
+
+-- CreateIndex
+CREATE INDEX "assignment_comments_created_at_idx" ON "assignment_comments"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "assignment_progress_assignment_id_idx" ON "assignment_progress"("assignment_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_progress_student_id_idx" ON "assignment_progress"("student_id");
+
+-- CreateIndex
+CREATE INDEX "assignment_progress_status_idx" ON "assignment_progress"("status");
+
+-- CreateIndex
+CREATE INDEX "assignment_progress_last_accessed_at_idx" ON "assignment_progress"("last_accessed_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assignment_progress_assignment_id_student_id_key" ON "assignment_progress"("assignment_id", "student_id");
+
+-- CreateIndex
+CREATE INDEX "fee_application_logs_school_id_idx" ON "fee_application_logs"("school_id");
+
+-- CreateIndex
+CREATE INDEX "fee_application_logs_fee_structure_id_idx" ON "fee_application_logs"("fee_structure_id");
+
+-- CreateIndex
+CREATE INDEX "fee_application_logs_term_id_idx" ON "fee_application_logs"("term_id");
+
+-- CreateIndex
+CREATE INDEX "fee_application_logs_applied_by_idx" ON "fee_application_logs"("applied_by");
+
+-- CreateIndex
+CREATE INDEX "fee_application_logs_created_at_idx" ON "fee_application_logs"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "bulk_operation_logs_school_id_idx" ON "bulk_operation_logs"("school_id");
+
+-- CreateIndex
+CREATE INDEX "bulk_operation_logs_operation_type_idx" ON "bulk_operation_logs"("operation_type");
+
+-- CreateIndex
+CREATE INDEX "bulk_operation_logs_initiated_by_idx" ON "bulk_operation_logs"("initiated_by");
+
+-- CreateIndex
+CREATE INDEX "bulk_operation_logs_created_at_idx" ON "bulk_operation_logs"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "external_transactions_school_id_idx" ON "external_transactions"("school_id");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_source_idx" ON "external_transactions"("source");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_reference_idx" ON "external_transactions"("reference");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_transaction_date_idx" ON "external_transactions"("transaction_date");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_reconciled_idx" ON "external_transactions"("reconciled");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_disputed_idx" ON "external_transactions"("disputed");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_student_id_idx" ON "external_transactions"("student_id");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_reconciled_at_idx" ON "external_transactions"("reconciled_at");
+
+-- CreateIndex
+CREATE INDEX "external_transactions_created_at_idx" ON "external_transactions"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "external_transactions_school_id_source_reference_transactio_key" ON "external_transactions"("school_id", "source", "reference", "transaction_date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "verification_tokens_token_key" ON "verification_tokens"("token");
+
+-- CreateIndex
+CREATE INDEX "verification_tokens_token_idx" ON "verification_tokens"("token");
+
+-- CreateIndex
+CREATE INDEX "verification_tokens_userId_idx" ON "verification_tokens"("userId");
+
+-- CreateIndex
+CREATE INDEX "verification_tokens_expiresAt_idx" ON "verification_tokens"("expiresAt");
+
+-- CreateIndex
+CREATE INDEX "verification_tokens_type_idx" ON "verification_tokens"("type");
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_school_id_idx" ON "parent_registration_requests"("school_id");
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_email_idx" ON "parent_registration_requests"("email");
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_phone_idx" ON "parent_registration_requests"("phone");
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_status_idx" ON "parent_registration_requests"("status");
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_created_at_idx" ON "parent_registration_requests"("created_at" DESC);
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_verification_token_idx" ON "parent_registration_requests"("verification_token");
+
+-- CreateIndex
+CREATE INDEX "parent_registration_requests_processed_at_idx" ON "parent_registration_requests"("processed_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "parent_registration_requests_school_id_email_key" ON "parent_registration_requests"("school_id", "email");
+
+-- CreateIndex
+CREATE INDEX "temp_students_school_id_idx" ON "temp_students"("school_id");
+
+-- CreateIndex
+CREATE INDEX "temp_students_parent_request_id_idx" ON "temp_students"("parent_request_id");
+
+-- CreateIndex
+CREATE INDEX "temp_students_admission_number_idx" ON "temp_students"("admission_number");
+
+-- CreateIndex
+CREATE INDEX "temp_students_class_name_idx" ON "temp_students"("class_name");
+
+-- CreateIndex
+CREATE INDEX "temp_students_is_verified_idx" ON "temp_students"("is_verified");
+
+-- CreateIndex
+CREATE INDEX "temp_students_actual_student_id_idx" ON "temp_students"("actual_student_id");
+
+-- CreateIndex
+CREATE INDEX "temp_students_created_at_idx" ON "temp_students"("created_at" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "temp_students_parent_request_id_admission_number_key" ON "temp_students"("parent_request_id", "admission_number");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "_RecordOfWorkToStream_AB_unique" ON "_RecordOfWorkToStream"("A", "B");
+
+-- CreateIndex
+CREATE INDEX "_RecordOfWorkToStream_B_index" ON "_RecordOfWorkToStream"("B");
+
+-- AddForeignKey
+ALTER TABLE "school_users" ADD CONSTRAINT "school_users_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "school_users" ADD CONSTRAINT "school_users_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teachers" ADD CONSTRAINT "teachers_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teachers" ADD CONSTRAINT "teachers_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parents" ADD CONSTRAINT "parents_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parents" ADD CONSTRAINT "parents_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "subjects" ADD CONSTRAINT "subjects_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "subjects" ADD CONSTRAINT "subjects_curriculum_id_fkey" FOREIGN KEY ("curriculum_id") REFERENCES "curricula"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "academic_years" ADD CONSTRAINT "academic_years_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "terms" ADD CONSTRAINT "terms_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "terms" ADD CONSTRAINT "terms_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teacher_assignments" ADD CONSTRAINT "teacher_assignments_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teacher_assignments" ADD CONSTRAINT "teacher_assignments_stream_id_fkey" FOREIGN KEY ("stream_id") REFERENCES "streams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teacher_assignments" ADD CONSTRAINT "teacher_assignments_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teacher_assignments" ADD CONSTRAINT "teacher_assignments_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teacher_assignment_subjects" ADD CONSTRAINT "teacher_assignment_subjects_teacher_assignment_id_fkey" FOREIGN KEY ("teacher_assignment_id") REFERENCES "teacher_assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "teacher_assignment_subjects" ADD CONSTRAINT "teacher_assignment_subjects_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "classes" ADD CONSTRAINT "classes_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "streams" ADD CONSTRAINT "streams_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "streams" ADD CONSTRAINT "streams_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "students" ADD CONSTRAINT "students_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "students" ADD CONSTRAINT "students_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "students" ADD CONSTRAINT "students_stream_id_fkey" FOREIGN KEY ("stream_id") REFERENCES "streams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "students" ADD CONSTRAINT "students_guardian_user_id_fkey" FOREIGN KEY ("guardian_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "students" ADD CONSTRAINT "students_primary_parent_id_fkey" FOREIGN KEY ("primary_parent_id") REFERENCES "parents"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_fee_assignments" ADD CONSTRAINT "student_fee_assignments_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_fee_assignments" ADD CONSTRAINT "student_fee_assignments_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_fee_assignments" ADD CONSTRAINT "student_fee_assignments_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_fee_assignments" ADD CONSTRAINT "student_fee_assignments_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_fee_assignments" ADD CONSTRAINT "student_fee_assignments_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_fee_assignments" ADD CONSTRAINT "student_fee_assignments_assigned_by_fkey" FOREIGN KEY ("assigned_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_parents" ADD CONSTRAINT "student_parents_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_parents" ADD CONSTRAINT "student_parents_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "parents"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_subjects" ADD CONSTRAINT "student_subjects_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_subjects" ADD CONSTRAINT "student_subjects_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_subjects" ADD CONSTRAINT "student_subjects_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_subjects" ADD CONSTRAINT "student_subjects_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_subjects" ADD CONSTRAINT "student_subjects_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_subjects" ADD CONSTRAINT "student_subjects_curriculum_id_fkey" FOREIGN KEY ("curriculum_id") REFERENCES "curricula"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cbc_strands" ADD CONSTRAINT "cbc_strands_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cbc_strands" ADD CONSTRAINT "cbc_strands_curriculum_id_fkey" FOREIGN KEY ("curriculum_id") REFERENCES "curricula"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cbc_strands" ADD CONSTRAINT "cbc_strands_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cbc_sub_strands" ADD CONSTRAINT "cbc_sub_strands_strand_id_fkey" FOREIGN KEY ("strand_id") REFERENCES "cbc_strands"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_assessment_id_fkey" FOREIGN KEY ("assessment_id") REFERENCES "assessments"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_curriculum_id_fkey" FOREIGN KEY ("curriculum_id") REFERENCES "curricula"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_graded_by_teacher_id_fkey" FOREIGN KEY ("graded_by_teacher_id") REFERENCES "teachers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_grading_system_id_fkey" FOREIGN KEY ("grading_system_id") REFERENCES "grading_systems"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_scores" ADD CONSTRAINT "student_scores_student_subject_id_fkey" FOREIGN KEY ("student_subject_id") REFERENCES "student_subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "grading_systems" ADD CONSTRAINT "grading_systems_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "grading_systems" ADD CONSTRAINT "grading_systems_curriculum_id_fkey" FOREIGN KEY ("curriculum_id") REFERENCES "curricula"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "grading_systems" ADD CONSTRAINT "grading_systems_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "grading_systems" ADD CONSTRAINT "grading_systems_applies_to_class_id_fkey" FOREIGN KEY ("applies_to_class_id") REFERENCES "classes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "grading_systems" ADD CONSTRAINT "grading_systems_applies_to_stream_id_fkey" FOREIGN KEY ("applies_to_stream_id") REFERENCES "streams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "curricula" ADD CONSTRAINT "curricula_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "grading_scales" ADD CONSTRAINT "grading_scales_grading_system_id_fkey" FOREIGN KEY ("grading_system_id") REFERENCES "grading_systems"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_messages" ADD CONSTRAINT "parent_messages_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_messages" ADD CONSTRAINT "parent_messages_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "parents"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_messages" ADD CONSTRAINT "parent_messages_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_messages" ADD CONSTRAINT "parent_messages_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_messages" ADD CONSTRAINT "parent_messages_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "schemes_of_work" ADD CONSTRAINT "schemes_of_work_stream_id_fkey" FOREIGN KEY ("stream_id") REFERENCES "streams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_topics" ADD CONSTRAINT "scheme_topics_scheme_of_work_id_fkey" FOREIGN KEY ("scheme_of_work_id") REFERENCES "schemes_of_work"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_topics" ADD CONSTRAINT "scheme_topics_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_topics" ADD CONSTRAINT "scheme_topics_cbc_strand_id_fkey" FOREIGN KEY ("cbc_strand_id") REFERENCES "cbc_strands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_topics" ADD CONSTRAINT "scheme_topics_cbc_sub_strand_id_fkey" FOREIGN KEY ("cbc_sub_strand_id") REFERENCES "cbc_sub_strands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_approvals" ADD CONSTRAINT "scheme_approvals_scheme_of_work_id_fkey" FOREIGN KEY ("scheme_of_work_id") REFERENCES "schemes_of_work"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_approvals" ADD CONSTRAINT "scheme_approvals_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "scheme_approvals" ADD CONSTRAINT "scheme_approvals_approver_id_fkey" FOREIGN KEY ("approver_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_scheme_of_work_id_fkey" FOREIGN KEY ("scheme_of_work_id") REFERENCES "schemes_of_work"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "records_of_work" ADD CONSTRAINT "records_of_work_scheme_topic_id_fkey" FOREIGN KEY ("scheme_topic_id") REFERENCES "scheme_topics"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "record_attachments" ADD CONSTRAINT "record_attachments_record_of_work_id_fkey" FOREIGN KEY ("record_of_work_id") REFERENCES "records_of_work"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "record_attachments" ADD CONSTRAINT "record_attachments_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "record_attachments" ADD CONSTRAINT "record_attachments_uploaded_by_fkey" FOREIGN KEY ("uploaded_by") REFERENCES "teachers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plans" ADD CONSTRAINT "lesson_plans_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plans" ADD CONSTRAINT "lesson_plans_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plans" ADD CONSTRAINT "lesson_plans_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plans" ADD CONSTRAINT "lesson_plans_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plans" ADD CONSTRAINT "lesson_plans_scheme_topic_id_fkey" FOREIGN KEY ("scheme_topic_id") REFERENCES "scheme_topics"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plan_templates" ADD CONSTRAINT "lesson_plan_templates_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plan_templates" ADD CONSTRAINT "lesson_plan_templates_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plan_templates" ADD CONSTRAINT "lesson_plan_templates_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lesson_plan_templates" ADD CONSTRAINT "lesson_plan_templates_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendance" ADD CONSTRAINT "attendance_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_teacher_assignment_id_fkey" FOREIGN KEY ("teacher_assignment_id") REFERENCES "teacher_assignments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_student_subject_id_fkey" FOREIGN KEY ("student_subject_id") REFERENCES "student_subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_stream_id_fkey" FOREIGN KEY ("stream_id") REFERENCES "streams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "teachers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_curriculum_id_fkey" FOREIGN KEY ("curriculum_id") REFERENCES "curricula"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_grading_system_id_fkey" FOREIGN KEY ("grading_system_id") REFERENCES "grading_systems"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_structures" ADD CONSTRAINT "fee_structures_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_statements" ADD CONSTRAINT "fee_statements_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_statements" ADD CONSTRAINT "fee_statements_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_statements" ADD CONSTRAINT "fee_statements_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_statement_items" ADD CONSTRAINT "fee_statement_items_fee_statement_id_fkey" FOREIGN KEY ("fee_statement_id") REFERENCES "fee_statements"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_items" ADD CONSTRAINT "fee_items_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_items" ADD CONSTRAINT "fee_items_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "term_fee_items" ADD CONSTRAINT "term_fee_items_fee_item_id_fkey" FOREIGN KEY ("fee_item_id") REFERENCES "fee_items"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "term_fee_items" ADD CONSTRAINT "term_fee_items_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "term_fee_structures" ADD CONSTRAINT "term_fee_structures_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "term_fee_structures" ADD CONSTRAINT "term_fee_structures_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_student_fee_assignment_id_fkey" FOREIGN KEY ("student_fee_assignment_id") REFERENCES "student_fee_assignments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_cancelled_by_fkey" FOREIGN KEY ("cancelled_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_fee_item_id_fkey" FOREIGN KEY ("fee_item_id") REFERENCES "fee_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_term_fee_item_id_fkey" FOREIGN KEY ("term_fee_item_id") REFERENCES "term_fee_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_verified_by_fkey" FOREIGN KEY ("verified_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_reconciled_by_fkey" FOREIGN KEY ("reconciled_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_methods" ADD CONSTRAINT "payment_methods_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "late_fee_configs" ADD CONSTRAINT "late_fee_configs_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_waivers" ADD CONSTRAINT "fee_waivers_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_waivers" ADD CONSTRAINT "fee_waivers_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_waivers" ADD CONSTRAINT "fee_waivers_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_waivers" ADD CONSTRAINT "fee_waivers_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_waivers" ADD CONSTRAINT "fee_waivers_approved_by_fkey" FOREIGN KEY ("approved_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_installments" ADD CONSTRAINT "payment_installments_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_reports" ADD CONSTRAINT "financial_reports_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_reports" ADD CONSTRAINT "financial_reports_generated_by_fkey" FOREIGN KEY ("generated_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_requested_by_fkey" FOREIGN KEY ("requested_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_approved_by_fkey" FOREIGN KEY ("approved_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_processed_by_fkey" FOREIGN KEY ("processed_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "refund_requests" ADD CONSTRAINT "refund_requests_rejected_by_fkey" FOREIGN KEY ("rejected_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_approved_by_fkey" FOREIGN KEY ("approved_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "subjects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_stream_id_fkey" FOREIGN KEY ("stream_id") REFERENCES "streams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_targets" ADD CONSTRAINT "assignment_targets_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_targets" ADD CONSTRAINT "assignment_targets_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_groups" ADD CONSTRAINT "assignment_groups_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_group_members" ADD CONSTRAINT "assignment_group_members_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "assignment_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_group_members" ADD CONSTRAINT "assignment_group_members_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessment_questions" ADD CONSTRAINT "assessment_questions_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_resources" ADD CONSTRAINT "assignment_resources_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_submissions" ADD CONSTRAINT "assignment_submissions_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_submissions" ADD CONSTRAINT "assignment_submissions_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_submissions" ADD CONSTRAINT "assignment_submissions_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "assignment_groups"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_submissions" ADD CONSTRAINT "assignment_submissions_submitted_by_id_fkey" FOREIGN KEY ("submitted_by_id") REFERENCES "students"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_submissions" ADD CONSTRAINT "assignment_submissions_graded_by_fkey" FOREIGN KEY ("graded_by") REFERENCES "teachers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_attachments" ADD CONSTRAINT "assignment_attachments_submission_id_fkey" FOREIGN KEY ("submission_id") REFERENCES "assignment_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessment_answers" ADD CONSTRAINT "assessment_answers_submission_id_fkey" FOREIGN KEY ("submission_id") REFERENCES "assignment_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assessment_answers" ADD CONSTRAINT "assessment_answers_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "assessment_questions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "peer_reviews" ADD CONSTRAINT "peer_reviews_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "peer_reviews" ADD CONSTRAINT "peer_reviews_reviewer_id_fkey" FOREIGN KEY ("reviewer_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "peer_reviews" ADD CONSTRAINT "peer_reviews_submission_id_fkey" FOREIGN KEY ("submission_id") REFERENCES "assignment_submissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "peer_reviews" ADD CONSTRAINT "peer_reviews_reviewee_id_fkey" FOREIGN KEY ("reviewee_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_comments" ADD CONSTRAINT "assignment_comments_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_comments" ADD CONSTRAINT "assignment_comments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_comments" ADD CONSTRAINT "assignment_comments_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_comments" ADD CONSTRAINT "assignment_comments_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "assignment_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_progress" ADD CONSTRAINT "assignment_progress_assignment_id_fkey" FOREIGN KEY ("assignment_id") REFERENCES "assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "assignment_progress" ADD CONSTRAINT "assignment_progress_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_fee_structure_id_fkey" FOREIGN KEY ("fee_structure_id") REFERENCES "fee_structures"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_stream_id_fkey" FOREIGN KEY ("stream_id") REFERENCES "streams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_term_id_fkey" FOREIGN KEY ("term_id") REFERENCES "terms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_academic_year_id_fkey" FOREIGN KEY ("academic_year_id") REFERENCES "academic_years"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "fee_application_logs" ADD CONSTRAINT "fee_application_logs_applied_by_fkey" FOREIGN KEY ("applied_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "bulk_operation_logs" ADD CONSTRAINT "bulk_operation_logs_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "bulk_operation_logs" ADD CONSTRAINT "bulk_operation_logs_initiated_by_fkey" FOREIGN KEY ("initiated_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "external_transactions" ADD CONSTRAINT "external_transactions_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "external_transactions" ADD CONSTRAINT "external_transactions_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "external_transactions" ADD CONSTRAINT "external_transactions_reconciled_by_fkey" FOREIGN KEY ("reconciled_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "external_transactions" ADD CONSTRAINT "external_transactions_disputed_by_fkey" FOREIGN KEY ("disputed_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "verification_tokens" ADD CONSTRAINT "verification_tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_registration_requests" ADD CONSTRAINT "parent_registration_requests_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "parent_registration_requests" ADD CONSTRAINT "parent_registration_requests_processed_by_fkey" FOREIGN KEY ("processed_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "temp_students" ADD CONSTRAINT "temp_students_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "schools"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "temp_students" ADD CONSTRAINT "temp_students_parent_request_id_fkey" FOREIGN KEY ("parent_request_id") REFERENCES "parent_registration_requests"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_RecordOfWorkToStream" ADD CONSTRAINT "_RecordOfWorkToStream_A_fkey" FOREIGN KEY ("A") REFERENCES "records_of_work"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_RecordOfWorkToStream" ADD CONSTRAINT "_RecordOfWorkToStream_B_fkey" FOREIGN KEY ("B") REFERENCES "streams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+
+
+
+
+///
+CREATE MATERIALIZED VIEW mv_school_dashboard AS
+SELECT 
+  s.id as school_id,
+  s.name as school_name,
+  -- Use correlated subqueries (faster than joins)
+  (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.is_active) as total_students,
+  (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.is_active) as total_teachers,
+  (SELECT COUNT(*) FROM parents p WHERE p.school_id = s.id AND p.is_active) as total_parents,
+  (SELECT COUNT(*) FROM classes c WHERE c.school_id = s.id AND c.is_active) as active_classes,
+  (SELECT COALESCE(SUM(amount), 0) FROM payments pay 
+   JOIN students st2 ON pay.student_id = st2.id 
+   WHERE st2.school_id = s.id 
+     AND pay.status = 'completed'
+     AND pay.created_at >= DATE_TRUNC('month', CURRENT_DATE)) as monthly_revenue,
+  -- ... add more metrics
+  CURRENT_TIMESTAMP as refreshed_at
+FROM schools s
+WHERE s.is_active = true;
+
+-- Add index
+CREATE UNIQUE INDEX idx_mv_school_dashboard_id ON mv_school_dashboard(school_id);
