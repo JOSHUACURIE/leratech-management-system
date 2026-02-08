@@ -2279,7 +2279,7 @@ duplicateScheme: async (schemeId: string, data: DuplicateSchemeData = {}): Promi
   // Get teacher dashboard statistics
   getDashboardStats: async () => {
     try {
-      const response = await api.get('/teacher/dashboard/stats');
+      const response = await api.get('/teachers/dashboard/stats');
       return response;
     } catch (error) {
       throw error;
