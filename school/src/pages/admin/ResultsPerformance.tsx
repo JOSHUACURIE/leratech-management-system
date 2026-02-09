@@ -19,7 +19,7 @@ import Card from "../../components/common/Card";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "react-hot-toast";
 import api from "../../services/api"; // Import your axios instance
-
+import { academicAPI } from "../../services/api";
 // Types
 interface StudentResult {
   id: string;
@@ -128,7 +128,7 @@ const ResultsPerformance: React.FC = () => {
 
   const fetchCurrentTerm = async () => {
     try {
-      const response = await api.get('/academic/current-term');
+      const response = await api.get('/academic/terms');
       
       if (response.data.success && response.data.data) {
         setFilters(prev => ({
@@ -143,83 +143,131 @@ const ResultsPerformance: React.FC = () => {
       toast.error(error.response?.data?.error || 'Failed to fetch current term');
     }
   };
+const fetchClasses = async () => {
+  try {
+    const response = await api.get('/classes');
+    
+    if (response.data.success) {
+      // Access the array from response.data.data
+      setClasses(response.data.data);
+      // Auto-select first class if none selected
+      if (response.data.data.length > 0 && !filters.classId) {
+        setFilters(prev => ({
+          ...prev,
+          classId: response.data.data[0].id
+        }));
+      }
+    }
+  } catch (error: any) {
+    console.error('Failed to fetch classes:', error);
+    toast.error(error.response?.data?.error || 'Failed to load classes');
+  }
+};
 
-  const fetchClasses = async () => {
-    try {
-      const response = await api.get('/academic/classes');
+ const fetchTerms = async () => {
+  try {
+    const response = await api.get('/academic/terms');
+    
+    if (response.data.success) {
+      // Check if data is an array or object
+      let termsData = response.data.data;
       
-      if (response.data.success) {
-        setClasses(response.data.data);
-        // Auto-select first class if none selected
-        if (response.data.data.length > 0 && !filters.classId) {
-          setFilters(prev => ({
-            ...prev,
-            classId: response.data.data[0].id
-          }));
+      // If it's not an array, check for nested structure
+      if (!Array.isArray(termsData) && termsData && typeof termsData === 'object') {
+        // Try to find an array in the object
+        if (termsData.terms && Array.isArray(termsData.terms)) {
+          termsData = termsData.terms;
+        } else if (termsData.data && Array.isArray(termsData.data)) {
+          termsData = termsData.data;
+        } else {
+          // Convert object values to array if needed
+          termsData = Object.values(termsData);
         }
       }
-    } catch (error: any) {
-      console.error('Failed to fetch classes:', error);
-      toast.error(error.response?.data?.error || 'Failed to load classes');
-    }
-  };
-
-  const fetchTerms = async () => {
-    try {
-      const response = await api.get('/academic/terms');
       
-      if (response.data.success) {
-        setTerms(response.data.data);
+      setTerms(termsData);
+    }
+  } catch (error: any) {
+    console.error('Failed to fetch terms:', error);
+    
+    // Handle 304 Not Modified
+    if (error.response?.status === 304) {
+      console.log('Terms unchanged (304)');
+      return;
+    }
+    
+    toast.error(error.response?.data?.error || 'Failed to load terms');
+  }
+};
+
+const fetchCurricula = async () => {
+  try {
+    const response = await api.get('/academic');
+    
+    if (response.data.success) {
+      // Access the array from response.data.data
+      setCurricula(response.data.data);
+      // Auto-select first curriculum if none selected
+      if (response.data.data.length > 0 && !filters.curriculumId) {
+        setFilters(prev => ({
+          ...prev,
+          curriculumId: response.data.data[0].id
+        }));
       }
-    } catch (error: any) {
-      console.error('Failed to fetch terms:', error);
-      toast.error(error.response?.data?.error || 'Failed to load terms');
     }
-  };
-
-  const fetchCurricula = async () => {
-    try {
-      const response = await api.get('/academic');
+  } catch (error: any) {
+    console.error('Failed to fetch curricula:', error);
+    toast.error(error.response?.data?.error || 'Failed to load curricula');
+  }
+};
+const fetchGradingSystems = async () => {
+  try {
+    const response = await api.get('/grading/systems', {
+      params: { type: 'overall_points' }
+    });
+    
+    if (response.data.success) {
+      let systemsData = response.data.data;
       
-      if (response.data.success) {
-        setCurricula(response.data.data);
-        // Auto-select first curriculum if none selected
-        if (response.data.data.length > 0 && !filters.curriculumId) {
-          setFilters(prev => ({
-            ...prev,
-            curriculumId: response.data.data[0].id
-          }));
+      // Check if data is an array or object
+      if (!Array.isArray(systemsData)) {
+        // Try to extract from nested structure
+        if (systemsData.raw && Array.isArray(systemsData.raw)) {
+          systemsData = systemsData.raw;
+        } else if (systemsData.systems?.subject && Array.isArray(systemsData.systems.subject)) {
+          systemsData = systemsData.systems.subject;
+        } else if (systemsData.data && Array.isArray(systemsData.data)) {
+          systemsData = systemsData.data;
+        } else {
+          // If still not an array, log for debugging
+          console.warn('Ugrading systems structure:', systemsData);
+          systemsData = [];
         }
       }
-    } catch (error: any) {
-      console.error('Failed to fetch curricula:', error);
-      toast.error(error.response?.data?.error || 'Failed to load curricula');
-    }
-  };
-
-  const fetchGradingSystems = async () => {
-    try {
-      const response = await api.get('/grading/systems', {
-        params: { type: 'overall_points' }
-      });
       
-      if (response.data.success) {
-        setGradingSystems(response.data.data);
-        // Auto-select default grading system
-        const defaultSystem = response.data.data.find((sys: any) => sys.is_default);
-        if (defaultSystem && !filters.gradingSystemId) {
-          setFilters(prev => ({
-            ...prev,
-            gradingSystemId: defaultSystem.id
-          }));
-        }
+      setGradingSystems(systemsData);
+      
+      // Auto-select default grading system
+      const defaultSystem = systemsData.find((sys: any) => sys.is_default);
+      if (defaultSystem && !filters.gradingSystemId) {
+        setFilters(prev => ({
+          ...prev,
+          gradingSystemId: defaultSystem.id
+        }));
       }
-    } catch (error: any) {
-      console.error('Failed to fetch grading systems:', error);
-      toast.error(error.response?.data?.error || 'Failed to load grading systems');
     }
-  };
-
+  } catch (error: any) {
+    console.error('Failed to fetch grading systems:', error);
+    
+    // Handle 304 Not Modified
+    if (error.response?.status === 304) {
+      console.log('Grading systems unchanged (304)');
+      return;
+    }
+    
+    toast.error(error.response?.data?.error || 'Failed to load grading systems');
+  }
+};
   const fetchResults = async () => {
     if (!filters.classId || !filters.termId) return;
     
