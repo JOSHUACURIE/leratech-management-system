@@ -13,7 +13,9 @@ import {
   Calendar,
   ChevronDown,
   AlertCircle,
-  TrendingDown
+  TrendingDown,
+  ChevronRight,
+  School
 } from "lucide-react";
 import Card from "../../components/common/Card";
 import { useAuth } from "../../context/AuthContext";
@@ -82,12 +84,24 @@ interface ClassOption {
 
 interface TermOption {
   id: string;
-  name?: string;
-  termName?: string;
-  academicYear: string;
-  isCurrent: boolean;
+  name: string;
+  term_name?: string;
+  academic_year_id: string;
+  is_current: boolean;
   start_date?: string;
   end_date?: string;
+  academicYear?: {
+    id: string;
+    year_name: string;
+  };
+}
+
+interface AcademicYearOption {
+  id: string;
+  year_name: string;
+  is_current: boolean;
+  start_date: string;
+  end_date: string;
 }
 
 interface CurriculumOption {
@@ -131,6 +145,8 @@ const ResultsPerformance: React.FC = () => {
   const [filters, setFilters] = useState<FilterOptions>({});
   
   const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
   const [terms, setTerms] = useState<TermOption[]>([]);
   const [curricula, setCurricula] = useState<CurriculumOption[]>([]);
   const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
@@ -138,14 +154,14 @@ const ResultsPerformance: React.FC = () => {
   
   const initialized = useRef(false);
 
-  // Initialize with default current term
+  // Initialize with default current academic year
   useEffect(() => {
     if (user?.first_name && !initialized.current) {
       initialized.current = true;
       const loadInitialData = async () => {
         await Promise.all([
           fetchClasses(),
-          fetchTerms(),
+          fetchAcademicYears(),
           fetchCurricula(),
           fetchGradingSystems(),
           fetchSubjects()
@@ -155,6 +171,16 @@ const ResultsPerformance: React.FC = () => {
       loadInitialData();
     }
   }, [user?.first_name]);
+
+  // Fetch terms when academic year changes
+  useEffect(() => {
+    if (selectedAcademicYear) {
+      fetchTerms(selectedAcademicYear);
+    } else {
+      setTerms([]);
+      setFilters(prev => ({ ...prev, termId: undefined }));
+    }
+  }, [selectedAcademicYear]);
 
   // Fetch results when filters change
   useEffect(() => {
@@ -193,46 +219,61 @@ const ResultsPerformance: React.FC = () => {
     }
   };
 
-  const fetchTerms = async () => {
+  const fetchAcademicYears = async () => {
     try {
-      const response = await api.get('/academic/terms');
+      const response = await api.get('/academic/years');
+      
+      if (response.data.success) {
+        const yearsData = response.data.data || [];
+        setAcademicYears(yearsData);
+        
+        // Auto-select current academic year if available
+        const currentYear = yearsData.find((year: AcademicYearOption) => year.is_current);
+        if (currentYear) {
+          setSelectedAcademicYear(currentYear.id);
+        } else if (yearsData.length > 0) {
+          setSelectedAcademicYear(yearsData[0].id);
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch academic years:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Academic years unchanged (304)');
+        return;
+      }
+      
+      toast.error(error.response?.data?.error || 'Failed to load academic years');
+    }
+  };
+
+  const fetchTerms = async (academicYearId: string) => {
+    try {
+      const response = await api.get(`/academic/years/${academicYearId}/terms`);
       
       if (response.data.success) {
         let termsData = response.data.data || [];
         
-        // Check if data is an array
-        if (!Array.isArray(termsData)) {
-          // Try to extract from nested structure
-          if (termsData.terms && Array.isArray(termsData.terms)) {
-            termsData = termsData.terms;
-          } else if (termsData.data && Array.isArray(termsData.data)) {
-            termsData = termsData.data;
-          } else {
-            // Convert object values to array if needed
-            termsData = Object.values(termsData);
-          }
+        // Handle different response structures
+        if (response.data.data?.terms && Array.isArray(response.data.data.terms)) {
+          termsData = response.data.data.terms;
+        } else if (Array.isArray(response.data.data)) {
+          termsData = response.data.data;
         }
         
-        // Ensure array
-        if (!Array.isArray(termsData)) {
-          termsData = [];
-        }
-        
-        // Map to expected structure
-        const formattedTerms: TermOption[] = termsData.map((term: any) => ({
-          id: term.id,
-          name: term.name || term.termName,
-          termName: term.name || term.termName,
-          academicYear: term.academicYear || term.year || '2023/2024',
-          isCurrent: term.isCurrent || term.is_current || false,
-          start_date: term.start_date,
-          end_date: term.end_date
+        // Ensure all terms have the academicYear property
+        const year = academicYears.find(y => y.id === academicYearId);
+        const termsWithYear = termsData.map((term: TermOption) => ({
+          ...term,
+          name: term.name || term.term_name,
+          academicYear: year
         }));
         
-        setTerms(formattedTerms);
+        setTerms(termsWithYear);
         
         // Auto-select current term if available
-        const currentTerm = formattedTerms.find(term => term.isCurrent);
+        const currentTerm = termsWithYear.find((term: TermOption) => term.is_current);
         if (currentTerm && !filters.termId) {
           setFilters(prev => ({
             ...prev,
@@ -374,39 +415,40 @@ const ResultsPerformance: React.FC = () => {
       return [];
     }
   };
-const fetchResults = async () => {
-  if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
-  
-  setLoading(true);
-  try {
-    const params = {
-      classId: filters.classId,
-      termId: filters.termId,
-      gradingSystemId: filters.gradingSystemId,
-      ...(filters.curriculumId && { curriculumId: filters.curriculumId })
-    };
 
-    const response = await api.get('/results/class', { params });
+  const fetchResults = async () => {
+    if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
     
-    if (response.data.success) {
-      // Your controller returns {success: true, gradingStandard, results}
-      setResults(response.data.results || []);
-    } else {
-      toast.error(response.data.error || 'Failed to fetch results');
+    setLoading(true);
+    try {
+      const params = {
+        classId: filters.classId,
+        termId: filters.termId,
+        gradingSystemId: filters.gradingSystemId,
+        ...(filters.curriculumId && { curriculumId: filters.curriculumId })
+      };
+
+      const response = await api.get('/results/class', { params });
+      
+      if (response.data.success) {
+        setResults(response.data.results || []);
+      } else {
+        toast.error(response.data.error || 'Failed to fetch results');
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch results:', error);
+      
+      // Check if endpoint exists
+      if (error.response?.status === 404) {
+        console.error('Endpoint /results/class not found! Check routes.');
+      }
+      
+      toast.error(error.response?.data?.error || 'Failed to fetch results');
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error('Failed to fetch results:', error);
-    
-    // Check if endpoint exists
-    if (error.response?.status === 404) {
-      console.error('Endpoint /results/class not found! Check routes.');
-    }
-    
-    toast.error(error.response?.data?.error || 'Failed to fetch results');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   const fetchPerformanceStats = async () => {
     if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
     
@@ -439,106 +481,107 @@ const fetchResults = async () => {
       setStatsLoading(false);
     }
   };
-const handleExportPDF = async (type: 'individual' | 'class' | 'stats') => {
-  if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
-    toast.error('Please select class, term, and grading system first');
-    return;
-  }
 
-  setExportLoading(true);
-  try {
-    const params = {
-      classId: filters.classId,
-      termId: filters.termId,
-      gradingSystemId: filters.gradingSystemId,
-      ...(filters.curriculumId && { curriculumId: filters.curriculumId })
-    };
-
-    let endpoint = '';
-    let filename = '';
-
-    switch (type) {
-      case 'individual':
-        // You need studentId for this
-        toast.error('Student ID required for individual report');
-        setExportLoading(false);
-        return;
-      case 'stats':
-        endpoint = '/results/class-stats-pdf';
-        filename = `performance_stats_${filters.classId}_${filters.termId}.pdf`;
-        break;
-      default:
-        toast.error('Class PDF broadsheet not available');
-        setExportLoading(false);
-        return;
+  const handleExportPDF = async (type: 'individual' | 'class' | 'stats') => {
+    if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+      toast.error('Please select class, term, and grading system first');
+      return;
     }
 
-    // Make API call to get PDF blob
-    const response = await api.get(endpoint, {
-      params,
-      responseType: 'blob'
-    });
+    setExportLoading(true);
+    try {
+      const params = {
+        classId: filters.classId,
+        termId: filters.termId,
+        gradingSystemId: filters.gradingSystemId,
+        ...(filters.curriculumId && { curriculumId: filters.curriculumId })
+      };
 
-    // Create blob and download
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded`);
-  } catch (error: any) {
-    console.error('Export failed:', error);
-    toast.error(error.response?.data?.error || 'Failed to export report');
-  } finally {
-    setExportLoading(false);
-  }
-};
-const handleExportExcel = async () => {
-  if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
-    toast.error('Please select class, term, and grading system first');
-    return;
-  }
+      let endpoint = '';
+      let filename = '';
 
-  setExportLoading(true);
-  try {
-    const params = {
-      classId: filters.classId,
-      termId: filters.termId,
-      gradingSystemId: filters.gradingSystemId
-    };
+      switch (type) {
+        case 'individual':
+          // You need studentId for this
+          toast.error('Student ID required for individual report');
+          setExportLoading(false);
+          return;
+        case 'stats':
+          endpoint = '/results/class-stats-pdf';
+          filename = `performance_stats_${filters.classId}_${filters.termId}.pdf`;
+          break;
+        default:
+          toast.error('Class PDF broadsheet not available');
+          setExportLoading(false);
+          return;
+      }
 
-    const response = await api.get('/results/class-broadsheet-excel', { // Correct endpoint
-      params,
-      responseType: 'blob'
-    });
-    
-    // Create blob and download
-    const blob = new Blob([response.data], { 
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-    });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `broadsheet_${filters.classId}_${filters.termId}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-    toast.success('Excel report downloaded');
-  } catch (error: any) {
-    console.error('Export failed:', error);
-    toast.error(error.response?.data?.error || 'Failed to export Excel');
-  } finally {
-    setExportLoading(false);
-  }
-};
+      
+      const response = await api.get(endpoint, {
+        params,
+        responseType: 'blob'
+      });
 
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded`);
+    } catch (error: any) {
+      console.error('Export failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to export report');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+      toast.error('Please select class, term, and grading system first');
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const params = {
+        classId: filters.classId,
+        termId: filters.termId,
+        gradingSystemId: filters.gradingSystemId
+      };
+
+      const response = await api.get('/results/class-broadsheet-excel', {
+        params,
+        responseType: 'blob'
+      });
+      
+      // Create blob and download
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `broadsheet_${filters.classId}_${filters.termId}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Excel report downloaded');
+    } catch (error: any) {
+      console.error('Export failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to export Excel');
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   const getGradeColor = (score: number) => {
     if (score >= 80) return "text-emerald-600 bg-emerald-50 border-emerald-100";
@@ -607,7 +650,7 @@ const handleExportExcel = async () => {
   ] : [];
 
   const renderFilterDropdown = () => (
-    <div className="absolute top-full right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 min-w-[300px] z-50">
+    <div className="absolute top-full right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 min-w-[320px] z-50">
       <div className="p-6 space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -622,7 +665,7 @@ const handleExportExcel = async () => {
             <option value="">Select Class</option>
             {classes.map(cls => (
               <option key={cls.id} value={cls.id}>
-                {cls.class_name || cls.className}
+                {cls.class_name}
               </option>
             ))}
           </select>
@@ -630,22 +673,51 @@ const handleExportExcel = async () => {
 
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <Calendar size={14} className="inline mr-2" />
-            Term
+            <School size={14} className="inline mr-2" />
+            Academic Year
           </label>
           <select 
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={filters.termId || ''}
-            onChange={(e) => setFilters({...filters, termId: e.target.value})}
+            value={selectedAcademicYear}
+            onChange={(e) => {
+              setSelectedAcademicYear(e.target.value);
+              // Clear term when academic year changes
+              setFilters(prev => ({ ...prev, termId: undefined }));
+            }}
           >
-            <option value="">Select Term</option>
-            {terms.map(term => (
-              <option key={term.id} value={term.id}>
-                {term.termName || term.name} - {term.academicYear} {term.isCurrent && '(Current)'}
+            <option value="">Select Academic Year</option>
+            {academicYears.map(year => (
+              <option key={year.id} value={year.id}>
+                {year.year_name} {year.is_current && '(Current)'}
               </option>
             ))}
           </select>
         </div>
+
+        {selectedAcademicYear && (
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <Calendar size={14} className="inline mr-2" />
+              Term
+            </label>
+            <select 
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.termId || ''}
+              onChange={(e) => setFilters({...filters, termId: e.target.value})}
+              disabled={!selectedAcademicYear || terms.length === 0}
+            >
+              <option value="">{terms.length === 0 ? 'No terms available' : 'Select Term'}</option>
+              {terms.map(term => (
+                <option key={term.id} value={term.id}>
+                  {term.name} {term.is_current && '(Current)'}
+                </option>
+              ))}
+            </select>
+            {!selectedAcademicYear && (
+              <p className="text-xs text-slate-400 mt-1">Select an academic year first</p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -690,6 +762,7 @@ const handleExportExcel = async () => {
             className="flex-1 px-4 py-2 text-sm font-bold text-slate-600 border border-slate-300 rounded-xl hover:bg-slate-50"
             onClick={() => {
               setFilters({});
+              setSelectedAcademicYear("");
               setShowFilters(false);
             }}
           >
@@ -752,13 +825,6 @@ const handleExportExcel = async () => {
               </button>
               <button 
                 className="w-full text-left px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-100"
-                onClick={() => handleExportPDF('class')}
-                disabled={exportLoading}
-              >
-                Class BroadSheet PDF
-              </button>
-              <button 
-                className="w-full text-left px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 onClick={() => handleExportPDF('stats')}
                 disabled={exportLoading}
               >
@@ -772,8 +838,16 @@ const handleExportExcel = async () => {
       </div>
 
       {/* Filters Summary */}
-      {(filters.classId || filters.termId) && (
-        <div className="flex items-center gap-3 text-sm">
+      {(filters.classId || filters.termId || selectedAcademicYear) && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          {selectedAcademicYear && (
+            <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
+              <School size={14} />
+              <span className="font-medium">
+                {academicYears.find(y => y.id === selectedAcademicYear)?.year_name || 'Academic Year'}
+              </span>
+            </div>
+          )}
           {filters.classId && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <Users size={14} />
@@ -786,7 +860,7 @@ const handleExportExcel = async () => {
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <Calendar size={14} />
               <span className="font-medium">
-                {terms.find(t => t.id === filters.termId)?.termName || terms.find(t => t.id === filters.termId)?.name || 'All Terms'}
+                {terms.find(t => t.id === filters.termId)?.name || 'All Terms'}
               </span>
             </div>
           )}
@@ -836,7 +910,7 @@ const handleExportExcel = async () => {
         ) : (
           <div className="col-span-4 p-8 bg-white/50 border border-slate-200 rounded-3xl text-center">
             <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-medium">Select a class, term, and grading system to view performance statistics</p>
+            <p className="text-slate-500 font-medium">Select a class, academic year, term, and grading system to view performance statistics</p>
           </div>
         )}
       </div>
