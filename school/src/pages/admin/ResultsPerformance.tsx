@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   TrendingUp, 
   Award, 
@@ -18,8 +18,8 @@ import {
 import Card from "../../components/common/Card";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "react-hot-toast";
-import api from "../../services/api"; // Import your axios instance
-import { academicAPI } from "../../services/api";
+import api from "../../services/api";
+
 // Types
 interface StudentResult {
   id: string;
@@ -40,30 +40,29 @@ interface StudentResult {
 }
 
 interface PerformanceStats {
-  classMeanPoints: number;
-  classMeanGrade: string;
-  totalStudents: number;
-  totalSubjects: number;
-  passRate: number;
-  topPerformerScore: number;
-  topPerformerName: string;
-  gradingSystemName: string;
-  subjectRanking: Array<{
-    subject: string;
-    meanPoints: number;
-    meanGrade: string;
-    studentCount: number;
-  }>;
-  gradeDistribution: Array<{
-    grade: string;
-    count: number;
-    percentage: number;
-    color: string;
-  }>;
-  topPerformers: Array<{
-    name: string;
-    totalPoints: number;
-  }>;
+  summary: {
+    classMeanPoints: string;
+    classMeanGrade: string;
+    totalStudents: number;
+    gradingSystemName: string;
+  };
+  data: {
+    subjectRanking: Array<{
+      subject: string;
+      meanPoints: string;
+      meanGrade: string;
+      studentCount: number;
+    }>;
+    gradeDistribution: Array<{
+      grade: string;
+      count: number;
+      color: string;
+    }>;
+    topPerformers: Array<{
+      name: string;
+      totalPoints: number;
+    }>;
+  };
 }
 
 interface FilterOptions {
@@ -75,15 +74,20 @@ interface FilterOptions {
 
 interface ClassOption {
   id: string;
-  className: string;
-  streamCount: number;
+  class_name: string;
+  class_level: number;
+  streamCount?: number;
+  streams?: Array<{ id: string; name: string }>;
 }
 
 interface TermOption {
   id: string;
-  termName: string;
+  name?: string;
+  termName?: string;
   academicYear: string;
   isCurrent: boolean;
+  start_date?: string;
+  end_date?: string;
 }
 
 interface CurriculumOption {
@@ -91,6 +95,28 @@ interface CurriculumOption {
   name: string;
   code: string;
   isActive: boolean;
+}
+
+interface GradingSystem {
+  id: string;
+  name: string;
+  description: string;
+  min_pass_mark: string;
+  is_default: boolean;
+  type: string;
+  grades: Array<{
+    id: string;
+    grading_system_id: string;
+    min_score: string;
+    max_score: string;
+    grade: string;
+    points: string;
+    description: string | null;
+    color_code: string | null;
+    is_passing: boolean;
+    cbc_level: string | null;
+    display_order: number;
+  }>;
 }
 
 const ResultsPerformance: React.FC = () => {
@@ -107,194 +133,280 @@ const ResultsPerformance: React.FC = () => {
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [terms, setTerms] = useState<TermOption[]>([]);
   const [curricula, setCurricula] = useState<CurriculumOption[]>([]);
-  const [gradingSystems, setGradingSystems] = useState<any[]>([]);
+  const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  
+  const initialized = useRef(false);
 
   // Initialize with default current term
   useEffect(() => {
-    if (user?.first_name) {
-      fetchCurrentTerm();
-      fetchClasses();
-      fetchCurricula();
-      fetchGradingSystems();
+    if (user?.first_name && !initialized.current) {
+      initialized.current = true;
+      const loadInitialData = async () => {
+        await Promise.all([
+          fetchClasses(),
+          fetchTerms(),
+          fetchCurricula(),
+          fetchGradingSystems(),
+          fetchSubjects()
+        ]);
+      };
+      
+      loadInitialData();
     }
   }, [user?.first_name]);
 
+  // Fetch results when filters change
   useEffect(() => {
-    if (filters.classId && filters.termId) {
+    if (filters.classId && filters.termId && filters.gradingSystemId) {
       fetchResults();
       fetchPerformanceStats();
     }
   }, [filters]);
 
-  const fetchCurrentTerm = async () => {
+  const fetchClasses = async () => {
+    try {
+      const response = await api.get('/classes');
+      
+      if (response.data.success) {
+        const classesData = response.data.data || [];
+        setClasses(classesData);
+        
+        // Auto-select first class if none selected
+        if (classesData.length > 0 && !filters.classId) {
+          setFilters(prev => ({
+            ...prev,
+            classId: classesData[0].id
+          }));
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch classes:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Classes unchanged (304)');
+        return;
+      }
+      
+      toast.error(error.response?.data?.error || 'Failed to load classes');
+    }
+  };
+
+  const fetchTerms = async () => {
     try {
       const response = await api.get('/academic/terms');
       
-      if (response.data.success && response.data.data) {
-        setFilters(prev => ({
-          ...prev,
-          termId: response.data.data.id
+      if (response.data.success) {
+        let termsData = response.data.data || [];
+        
+        // Check if data is an array
+        if (!Array.isArray(termsData)) {
+          // Try to extract from nested structure
+          if (termsData.terms && Array.isArray(termsData.terms)) {
+            termsData = termsData.terms;
+          } else if (termsData.data && Array.isArray(termsData.data)) {
+            termsData = termsData.data;
+          } else {
+            // Convert object values to array if needed
+            termsData = Object.values(termsData);
+          }
+        }
+        
+        // Ensure array
+        if (!Array.isArray(termsData)) {
+          termsData = [];
+        }
+        
+        // Map to expected structure
+        const formattedTerms: TermOption[] = termsData.map((term: any) => ({
+          id: term.id,
+          name: term.name || term.termName,
+          termName: term.name || term.termName,
+          academicYear: term.academicYear || term.year || '2023/2024',
+          isCurrent: term.isCurrent || term.is_current || false,
+          start_date: term.start_date,
+          end_date: term.end_date
         }));
-        // Also fetch all terms for the dropdown
-        fetchTerms();
+        
+        setTerms(formattedTerms);
+        
+        // Auto-select current term if available
+        const currentTerm = formattedTerms.find(term => term.isCurrent);
+        if (currentTerm && !filters.termId) {
+          setFilters(prev => ({
+            ...prev,
+            termId: currentTerm.id
+          }));
+        }
       }
     } catch (error: any) {
-      console.error('Failed to fetch current term:', error);
-      toast.error(error.response?.data?.error || 'Failed to fetch current term');
+      console.error('Failed to fetch terms:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Terms unchanged (304)');
+        return;
+      }
+      
+      toast.error(error.response?.data?.error || 'Failed to load terms');
     }
   };
-const fetchClasses = async () => {
-  try {
-    const response = await api.get('/classes');
-    
-    if (response.data.success) {
-      // Access the array from response.data.data
-      setClasses(response.data.data);
-      // Auto-select first class if none selected
-      if (response.data.data.length > 0 && !filters.classId) {
-        setFilters(prev => ({
-          ...prev,
-          classId: response.data.data[0].id
-        }));
-      }
-    }
-  } catch (error: any) {
-    console.error('Failed to fetch classes:', error);
-    toast.error(error.response?.data?.error || 'Failed to load classes');
-  }
-};
 
- const fetchTerms = async () => {
-  try {
-    const response = await api.get('/academic/terms');
-    
-    if (response.data.success) {
-      // Check if data is an array or object
-      let termsData = response.data.data;
-      
-      // If it's not an array, check for nested structure
-      if (!Array.isArray(termsData) && termsData && typeof termsData === 'object') {
-        // Try to find an array in the object
-        if (termsData.terms && Array.isArray(termsData.terms)) {
-          termsData = termsData.terms;
-        } else if (termsData.data && Array.isArray(termsData.data)) {
-          termsData = termsData.data;
-        } else {
-          // Convert object values to array if needed
-          termsData = Object.values(termsData);
-        }
-      }
-      
-      setTerms(termsData);
-    }
-  } catch (error: any) {
-    console.error('Failed to fetch terms:', error);
-    
-    // Handle 304 Not Modified
-    if (error.response?.status === 304) {
-      console.log('Terms unchanged (304)');
-      return;
-    }
-    
-    toast.error(error.response?.data?.error || 'Failed to load terms');
-  }
-};
-
-const fetchCurricula = async () => {
-  try {
-    const response = await api.get('/academic');
-    
-    if (response.data.success) {
-      // Access the array from response.data.data
-      setCurricula(response.data.data);
-      // Auto-select first curriculum if none selected
-      if (response.data.data.length > 0 && !filters.curriculumId) {
-        setFilters(prev => ({
-          ...prev,
-          curriculumId: response.data.data[0].id
-        }));
-      }
-    }
-  } catch (error: any) {
-    console.error('Failed to fetch curricula:', error);
-    toast.error(error.response?.data?.error || 'Failed to load curricula');
-  }
-};
-const fetchGradingSystems = async () => {
-  try {
-    const response = await api.get('/grading/systems', {
-      params: { type: 'overall_points' }
-    });
-    
-    if (response.data.success) {
-      let systemsData = response.data.data;
-      
-      // Check if data is an array or object
-      if (!Array.isArray(systemsData)) {
-        // Try to extract from nested structure
-        if (systemsData.raw && Array.isArray(systemsData.raw)) {
-          systemsData = systemsData.raw;
-        } else if (systemsData.systems?.subject && Array.isArray(systemsData.systems.subject)) {
-          systemsData = systemsData.systems.subject;
-        } else if (systemsData.data && Array.isArray(systemsData.data)) {
-          systemsData = systemsData.data;
-        } else {
-          // If still not an array, log for debugging
-          console.warn('Ugrading systems structure:', systemsData);
-          systemsData = [];
-        }
-      }
-      
-      setGradingSystems(systemsData);
-      
-      // Auto-select default grading system
-      const defaultSystem = systemsData.find((sys: any) => sys.is_default);
-      if (defaultSystem && !filters.gradingSystemId) {
-        setFilters(prev => ({
-          ...prev,
-          gradingSystemId: defaultSystem.id
-        }));
-      }
-    }
-  } catch (error: any) {
-    console.error('Failed to fetch grading systems:', error);
-    
-    // Handle 304 Not Modified
-    if (error.response?.status === 304) {
-      console.log('Grading systems unchanged (304)');
-      return;
-    }
-    
-    toast.error(error.response?.data?.error || 'Failed to load grading systems');
-  }
-};
-  const fetchResults = async () => {
-    if (!filters.classId || !filters.termId) return;
-    
-    setLoading(true);
+  const fetchCurricula = async () => {
     try {
-      const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        ...(filters.gradingSystemId && { gradingSystemId: filters.gradingSystemId }),
-        ...(filters.curriculumId && { curriculumId: filters.curriculumId })
-      };
-
-      const response = await api.get('/results/class', { params });
+      const response = await api.get('/academic');
       
       if (response.data.success) {
-        setResults(response.data.results || []);
-      } else {
-        toast.error(response.data.error || 'Failed to fetch results');
+        const curriculaData = response.data.data || [];
+        setCurricula(curriculaData);
+        
+        // Auto-select first curriculum if none selected
+        if (curriculaData.length > 0 && !filters.curriculumId) {
+          setFilters(prev => ({
+            ...prev,
+            curriculumId: curriculaData[0].id
+          }));
+        }
       }
     } catch (error: any) {
-      console.error('Failed to fetch results:', error);
-      toast.error(error.response?.data?.error || 'Failed to fetch results');
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch curricula:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Curricula unchanged (304)');
+        return;
+      }
+      
+      toast.error(error.response?.data?.error || 'Failed to load curricula');
     }
   };
 
+  const fetchGradingSystems = async () => {
+    try {
+      const response = await api.get('/grading/systems', {
+        params: { type: 'overall_points' }
+      });
+      
+      if (response.data.success) {
+        let systemsData = response.data.data;
+        
+        // Check if data is an array or object
+        if (!Array.isArray(systemsData)) {
+          // Try to extract from nested structure
+          if (systemsData?.raw && Array.isArray(systemsData.raw)) {
+            systemsData = systemsData.raw;
+          } else if (systemsData?.systems?.subject && Array.isArray(systemsData.systems.subject)) {
+            systemsData = systemsData.systems.subject;
+          } else if (systemsData?.data && Array.isArray(systemsData.data)) {
+            systemsData = systemsData.data;
+          } else {
+            // If still not an array, use empty array
+            systemsData = [];
+          }
+        }
+        
+        // Ensure it's an array
+        if (!Array.isArray(systemsData)) {
+          systemsData = [];
+        }
+        
+        setGradingSystems(systemsData);
+        
+        // Auto-select default grading system
+        const defaultSystem = systemsData.find((sys: GradingSystem) => sys.is_default);
+        if (defaultSystem && !filters.gradingSystemId) {
+          setFilters(prev => ({
+            ...prev,
+            gradingSystemId: defaultSystem.id
+          }));
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch grading systems:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Grading systems unchanged (304)');
+        return;
+      }
+      
+      toast.error(error.response?.data?.error || 'Failed to load grading systems');
+    }
+  };
+
+  const fetchSubjects = async () => {
+    try {
+      const response = await api.get('/subjects');
+      
+      if (response.data.success) {
+        const subjectsData = response.data.data || [];
+        setSubjects(subjectsData);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch subjects:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Subjects unchanged (304)');
+        return;
+      }
+      
+      // Don't show error toast for subjects as it's not critical
+    }
+  };
+
+  const fetchSubjectScores = async (subjectId: string) => {
+    try {
+      const params = {
+        termId: filters.termId,
+        classId: filters.classId
+      };
+      
+      const response = await api.get(`/scores/subject/${subjectId}`, { params });
+      
+      if (response.data.success) {
+        return response.data.data;
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch subject scores:', error);
+      toast.error(error.response?.data?.error || 'Failed to fetch subject scores');
+      return [];
+    }
+  };
+const fetchResults = async () => {
+  if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
+  
+  setLoading(true);
+  try {
+    const params = {
+      classId: filters.classId,
+      termId: filters.termId,
+      gradingSystemId: filters.gradingSystemId,
+      ...(filters.curriculumId && { curriculumId: filters.curriculumId })
+    };
+
+    const response = await api.get('/results/class', { params });
+    
+    if (response.data.success) {
+      // Your controller returns {success: true, gradingStandard, results}
+      setResults(response.data.results || []);
+    } else {
+      toast.error(response.data.error || 'Failed to fetch results');
+    }
+  } catch (error: any) {
+    console.error('Failed to fetch results:', error);
+    
+    // Check if endpoint exists
+    if (error.response?.status === 404) {
+      console.error('Endpoint /results/class not found! Check routes.');
+    }
+    
+    toast.error(error.response?.data?.error || 'Failed to fetch results');
+  } finally {
+    setLoading(false);
+  }
+};
   const fetchPerformanceStats = async () => {
     if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
     
@@ -309,115 +421,124 @@ const fetchGradingSystems = async () => {
       const response = await api.get('/results/class-stats', { params });
       
       if (response.data.success) {
-        setStats(response.data.data);
+        setStats(response.data.data || response.data);
       } else {
         toast.error(response.data.error || 'Failed to fetch statistics');
       }
     } catch (error: any) {
       console.error('Failed to fetch stats:', error);
+      
+      // Handle 304 Not Modified
+      if (error.response?.status === 304) {
+        console.log('Stats unchanged (304)');
+        return;
+      }
+      
       toast.error(error.response?.data?.error || 'Failed to fetch statistics');
     } finally {
       setStatsLoading(false);
     }
   };
+const handleExportPDF = async (type: 'individual' | 'class' | 'stats') => {
+  if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+    toast.error('Please select class, term, and grading system first');
+    return;
+  }
 
-  const handleExportPDF = async (type: 'individual' | 'class' | 'stats') => {
-    if (!filters.classId || !filters.termId) {
-      toast.error('Please select class and term first');
-      return;
+  setExportLoading(true);
+  try {
+    const params = {
+      classId: filters.classId,
+      termId: filters.termId,
+      gradingSystemId: filters.gradingSystemId,
+      ...(filters.curriculumId && { curriculumId: filters.curriculumId })
+    };
+
+    let endpoint = '';
+    let filename = '';
+
+    switch (type) {
+      case 'individual':
+        // You need studentId for this
+        toast.error('Student ID required for individual report');
+        setExportLoading(false);
+        return;
+      case 'stats':
+        endpoint = '/results/class-stats-pdf';
+        filename = `performance_stats_${filters.classId}_${filters.termId}.pdf`;
+        break;
+      default:
+        toast.error('Class PDF broadsheet not available');
+        setExportLoading(false);
+        return;
     }
 
-    setExportLoading(true);
-    try {
-      const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        ...(filters.gradingSystemId && { gradingSystemId: filters.gradingSystemId }),
-        ...(filters.curriculumId && { curriculumId: filters.curriculumId })
-      };
+    // Make API call to get PDF blob
+    const response = await api.get(endpoint, {
+      params,
+      responseType: 'blob'
+    });
 
-      let endpoint = '';
-      let filename = '';
+    // Create blob and download
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded`);
+  } catch (error: any) {
+    console.error('Export failed:', error);
+    toast.error(error.response?.data?.error || 'Failed to export report');
+  } finally {
+    setExportLoading(false);
+  }
+};
+const handleExportExcel = async () => {
+  if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+    toast.error('Please select class, term, and grading system first');
+    return;
+  }
 
-      switch (type) {
-        case 'class':
-          endpoint = '/results/class-broadsheet';
-          filename = `class_broadsheet_${filters.classId}_${filters.termId}.pdf`;
-          break;
-        case 'stats':
-          endpoint = '/results/class-stats-pdf';
-          filename = `performance_stats_${filters.classId}_${filters.termId}.pdf`;
-          break;
-        default:
-          return;
-      }
+  setExportLoading(true);
+  try {
+    const params = {
+      classId: filters.classId,
+      termId: filters.termId,
+      gradingSystemId: filters.gradingSystemId
+    };
 
-      // Make API call to get PDF blob
-      const response = await api.get(endpoint, {
-        params,
-        responseType: 'blob'
-      });
+    const response = await api.get('/results/class-broadsheet-excel', { // Correct endpoint
+      params,
+      responseType: 'blob'
+    });
+    
+    // Create blob and download
+    const blob = new Blob([response.data], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `broadsheet_${filters.classId}_${filters.termId}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    toast.success('Excel report downloaded');
+  } catch (error: any) {
+    console.error('Export failed:', error);
+    toast.error(error.response?.data?.error || 'Failed to export Excel');
+  } finally {
+    setExportLoading(false);
+  }
+};
 
-      // Create blob and download
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded`);
-    } catch (error: any) {
-      console.error('Export failed:', error);
-      toast.error(error.response?.data?.error || 'Failed to export report');
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
-  const handleExportExcel = async () => {
-    if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
-      toast.error('Please select class, term, and grading system first');
-      return;
-    }
-
-    setExportLoading(true);
-    try {
-      const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId
-      };
-
-      const response = await api.get('/results/class-excel', {
-        params,
-        responseType: 'blob'
-      });
-      
-      // Create blob and download
-      const blob = new Blob([response.data], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `broadsheet_${filters.classId}_${filters.termId}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('Excel report downloaded');
-    } catch (error: any) {
-      console.error('Export failed:', error);
-      toast.error(error.response?.data?.error || 'Failed to export Excel');
-    } finally {
-      setExportLoading(false);
-    }
-  };
 
   const getGradeColor = (score: number) => {
     if (score >= 80) return "text-emerald-600 bg-emerald-50 border-emerald-100";
@@ -438,28 +559,33 @@ const fetchGradingSystems = async () => {
     return Math.round((meanPoints / 12) * 100);
   };
 
-  const calculatePassRate = (stats: PerformanceStats) => {
-    if (!stats.gradeDistribution.length) return 0;
+  const calculatePassRate = (statsData: PerformanceStats) => {
+    if (!statsData?.data?.gradeDistribution?.length) return 0;
     const passingGrades = ['A', 'B', 'C'];
-    const totalGrades = stats.gradeDistribution.reduce((sum, g) => sum + g.count, 0);
-    const passingGradesCount = stats.gradeDistribution
+    const totalGrades = statsData.data.gradeDistribution.reduce((sum, g) => sum + g.count, 0);
+    const passingGradesCount = statsData.data.gradeDistribution
       .filter(g => passingGrades.includes(g.grade))
       .reduce((sum, g) => sum + g.count, 0);
     
     return totalGrades > 0 ? Math.round((passingGradesCount / totalGrades) * 100) : 0;
   };
 
+  const getTopPerformerScore = (statsData: PerformanceStats) => {
+    if (!statsData?.data?.topPerformers?.length) return 0;
+    return Math.round((statsData.data.topPerformers[0].totalPoints / 12) * 100);
+  };
+
   const statsArray = stats ? [
     { 
       label: "Class Average", 
-      val: `${stats.classMeanPoints.toFixed(1)}`, 
+      val: `${stats.summary?.classMeanPoints || '0.00'}`, 
       subLabel: "Mean Points",
       icon: <Target />, 
       color: "from-blue-600 to-indigo-700" 
     },
     { 
       label: "Mean Grade", 
-      val: stats.classMeanGrade, 
+      val: stats.summary?.classMeanGrade || 'N/A', 
       subLabel: "Overall",
       icon: <Award />, 
       color: "from-purple-600 to-fuchsia-600" 
@@ -473,8 +599,8 @@ const fetchGradingSystems = async () => {
     },
     { 
       label: "Top Performer", 
-      val: stats.topPerformerScore ? `${Math.round((stats.topPerformerScore / 12) * 100)}%` : "N/A", 
-      subLabel: stats.topPerformerName?.split(' ')[0] || '',
+      val: `${getTopPerformerScore(stats)}%`, 
+      subLabel: stats.data?.topPerformers?.[0]?.name?.split(' ')[0] || '',
       icon: <Star />, 
       color: "from-amber-400 to-orange-500" 
     },
@@ -496,7 +622,7 @@ const fetchGradingSystems = async () => {
             <option value="">Select Class</option>
             {classes.map(cls => (
               <option key={cls.id} value={cls.id}>
-                {cls.className}
+                {cls.class_name || cls.className}
               </option>
             ))}
           </select>
@@ -515,7 +641,7 @@ const fetchGradingSystems = async () => {
             <option value="">Select Term</option>
             {terms.map(term => (
               <option key={term.id} value={term.id}>
-                {term.termName} - {term.academicYear} {term.isCurrent && '(Current)'}
+                {term.termName || term.name} - {term.academicYear} {term.isCurrent && '(Current)'}
               </option>
             ))}
           </select>
@@ -587,7 +713,7 @@ const fetchGradingSystems = async () => {
         <div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tight">Academic Insights</h1>
           <p className="text-slate-500 font-medium">
-            {stats?.gradingSystemName ? `Using ${stats.gradingSystemName} Grading` : 'Visualizing student performance and grading trends'}
+            {stats?.summary?.gradingSystemName ? `Using ${stats.summary.gradingSystemName} Grading` : 'Visualizing student performance and grading trends'}
           </p>
         </div>
         <div className="flex items-center gap-3 relative">
@@ -604,7 +730,7 @@ const fetchGradingSystems = async () => {
           <div className="relative group">
             <button 
               className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50"
-              disabled={exportLoading || !filters.classId || !filters.termId}
+              disabled={exportLoading || !filters.classId || !filters.termId || !filters.gradingSystemId}
               onClick={() => handleExportExcel()}
             >
               {exportLoading ? (
@@ -648,23 +774,35 @@ const fetchGradingSystems = async () => {
       {/* Filters Summary */}
       {(filters.classId || filters.termId) && (
         <div className="flex items-center gap-3 text-sm">
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
-            <Users size={14} />
-            <span className="font-medium">
-              {classes.find(c => c.id === filters.classId)?.className || 'All Classes'}
-            </span>
-          </div>
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
-            <Calendar size={14} />
-            <span className="font-medium">
-              {terms.find(t => t.id === filters.termId)?.termName || 'All Terms'}
-            </span>
-          </div>
+          {filters.classId && (
+            <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
+              <Users size={14} />
+              <span className="font-medium">
+                {classes.find(c => c.id === filters.classId)?.class_name || 'All Classes'}
+              </span>
+            </div>
+          )}
+          {filters.termId && (
+            <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
+              <Calendar size={14} />
+              <span className="font-medium">
+                {terms.find(t => t.id === filters.termId)?.termName || terms.find(t => t.id === filters.termId)?.name || 'All Terms'}
+              </span>
+            </div>
+          )}
           {filters.curriculumId && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <BookOpen size={14} />
               <span className="font-medium">
                 {curricula.find(c => c.id === filters.curriculumId)?.name || ''}
+              </span>
+            </div>
+          )}
+          {filters.gradingSystemId && (
+            <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
+              <BarChart2 size={14} />
+              <span className="font-medium">
+                {gradingSystems.find(s => s.id === filters.gradingSystemId)?.name || 'Grading System'}
               </span>
             </div>
           )}
@@ -698,7 +836,7 @@ const fetchGradingSystems = async () => {
         ) : (
           <div className="col-span-4 p-8 bg-white/50 border border-slate-200 rounded-3xl text-center">
             <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-medium">Select a class and term to view performance statistics</p>
+            <p className="text-slate-500 font-medium">Select a class, term, and grading system to view performance statistics</p>
           </div>
         )}
       </div>
@@ -710,7 +848,7 @@ const fetchGradingSystems = async () => {
             <h3 className="text-xl font-extrabold text-slate-800">Student Rankings</h3>
             {stats && (
               <p className="text-sm text-slate-500 mt-1">
-                {stats.totalStudents} students • {stats.subjectRanking.length} subjects • {stats.gradingSystemName}
+                {stats.summary?.totalStudents || 0} students • {stats.data?.subjectRanking?.length || 0} subjects • {stats.summary?.gradingSystemName || 'No System'}
               </p>
             )}
           </div>
@@ -839,7 +977,7 @@ const fetchGradingSystems = async () => {
         {results.length > 0 && (
           <div className="px-8 py-4 border-t border-slate-100 flex justify-between items-center text-sm">
             <span className="text-slate-500">
-              Showing {results.length} of {stats?.totalStudents || 0} students
+              Showing {results.length} of {stats?.summary?.totalStudents || 0} students
             </span>
             <div className="flex items-center gap-2">
               <button className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-50 rounded-xl">
@@ -854,15 +992,15 @@ const fetchGradingSystems = async () => {
       </Card>
 
       {/* Grade Distribution Visualizer (if stats available) */}
-      {stats && stats.gradeDistribution.length > 0 && (
+      {stats?.data?.gradeDistribution && stats.data.gradeDistribution.length > 0 && (
         <Card className="border-none shadow-xl rounded-3xl bg-white">
           <div className="p-8 border-b border-slate-100">
             <h3 className="text-xl font-extrabold text-slate-800">Grade Distribution</h3>
-            <p className="text-slate-500 text-sm mt-1">Performance spread across {stats.totalStudents} students</p>
+            <p className="text-slate-500 text-sm mt-1">Performance spread across {stats.summary?.totalStudents || 0} students</p>
           </div>
           <div className="p-8">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-              {stats.gradeDistribution.map((dist) => (
+              {stats.data.gradeDistribution.map((dist) => (
                 <div key={dist.grade} className="text-center">
                   <div className="mb-2">
                     <span className={`inline-block w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg`}
@@ -871,7 +1009,9 @@ const fetchGradingSystems = async () => {
                     </span>
                   </div>
                   <div className="text-sm font-bold text-slate-700">{dist.count} students</div>
-                  <div className="text-xs text-slate-500">{dist.percentage}%</div>
+                  <div className="text-xs text-slate-500">
+                    {Math.round((dist.count / (stats.summary?.totalStudents || 1)) * 100)}%
+                  </div>
                 </div>
               ))}
             </div>
@@ -880,7 +1020,7 @@ const fetchGradingSystems = async () => {
       )}
 
       {/* Subject Performance (if stats available) */}
-      {stats && stats.subjectRanking.length > 0 && (
+      {stats?.data?.subjectRanking && stats.data.subjectRanking.length > 0 && (
         <Card className="border-none shadow-xl rounded-3xl bg-white">
           <div className="p-8 border-b border-slate-100">
             <h3 className="text-xl font-extrabold text-slate-800">Subject Performance Ranking</h3>
@@ -888,40 +1028,45 @@ const fetchGradingSystems = async () => {
           </div>
           <div className="p-8">
             <div className="space-y-4">
-              {stats.subjectRanking.map((subject, index) => (
-                <div key={subject.subject} className="flex items-center gap-4 p-4 hover:bg-slate-50 rounded-2xl">
-                  <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
-                    #{index + 1}
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-slate-800">{subject.subject}</span>
-                      <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                        subject.meanGrade === 'A' ? 'bg-emerald-100 text-emerald-700' :
-                        subject.meanGrade === 'B' ? 'bg-blue-100 text-blue-700' :
-                        subject.meanGrade === 'C' ? 'bg-amber-100 text-amber-700' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        {subject.meanGrade}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
-                          style={{ width: `${(subject.meanPoints / 12) * 100}%` }}
-                        />
+              {stats.data.subjectRanking.map((subject, index) => {
+                const meanPoints = parseFloat(subject.meanPoints || '0');
+                const percentage = (meanPoints / 12) * 100;
+                
+                return (
+                  <div key={subject.subject} className="flex items-center gap-4 p-4 hover:bg-slate-50 rounded-2xl">
+                    <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
+                      #{index + 1}
+                    </span>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-bold text-slate-800">{subject.subject}</span>
+                        <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                          subject.meanGrade === 'A' ? 'bg-emerald-100 text-emerald-700' :
+                          subject.meanGrade === 'B' ? 'bg-blue-100 text-blue-700' :
+                          subject.meanGrade === 'C' ? 'bg-amber-100 text-amber-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {subject.meanGrade}
+                        </span>
                       </div>
-                      <span className="text-sm font-bold text-slate-700 min-w-[60px]">
-                        {subject.meanPoints.toFixed(1)} pts
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-2">
-                      {subject.studentCount} students assessed
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-bold text-slate-700 min-w-[60px]">
+                          {meanPoints.toFixed(1)} pts
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-2">
+                        {subject.studentCount} students assessed
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </Card>
