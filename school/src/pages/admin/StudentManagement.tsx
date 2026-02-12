@@ -1468,8 +1468,16 @@ const StudentManagement: React.FC = () => {
   };
 
   const handleBulkUploadSuccess = async () => {
-    fetchStudents(pagination.page);
-  };
+  try {
+    // Simply refetch the current page with existing filters and pagination
+    await fetchStudents(pagination.page);
+    
+    // Optionally show a success toast/notification
+    console.log('Bulk upload completed, refreshed student list');
+  } catch (err) {
+    console.error("Failed to refresh students after bulk upload:", err);
+  }
+};
 
   // Generate page numbers for pagination UI
   const getPageNumbers = () => {
