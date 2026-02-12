@@ -2621,7 +2621,7 @@ export const studentAPI = {
     if (streamId) formData.append('streamId', streamId);
     formData.append('dryRun', String(dryRun));
 
-    return api.post<BulkUploadResponse>('/students/bulk-upload', formData, {
+    return api.post<BulkUploadResponse>('/bulk-upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -2659,7 +2659,7 @@ export const studentAPI = {
    * console.log(status.data.eta); // '2024-02-12T15:30:45.123Z'
    */
   getBulkUploadStatus: (uploadId: string) => 
-    api.get<BulkUploadStatusResponse>(`/students/bulk-upload/${uploadId}/status`),
+    api.get<BulkUploadStatusResponse>(`/bulk-upload/${uploadId}/status`),
 
   /**
    * 📋 GET ALL BULK UPLOADS
@@ -2678,7 +2678,7 @@ export const studentAPI = {
     status?: 'queued' | 'processing' | 'completed' | 'failed';
     fromDate?: string;
     toDate?: string;
-  }) => api.get<BulkUploadHistoryResponse>('/students/bulk-uploads', { params }),
+  }) => api.get<BulkUploadHistoryResponse>('/bulk-uploads', { params }),
 
   /**
    * 🛑 CANCEL BULK UPLOAD
@@ -2691,7 +2691,7 @@ export const studentAPI = {
    * await studentAPI.cancelBulkUpload('abc-123');
    */
   cancelBulkUpload: (uploadId: string) => 
-    api.post(`/students/bulk-upload/${uploadId}/cancel`),
+    api.post(`/bulk-upload/${uploadId}/cancel`),
 
   /**
    * 📥 DOWNLOAD TEMPLATE
@@ -2710,7 +2710,7 @@ export const studentAPI = {
    * link.click();
    */
   downloadTemplate: (format: 'csv' | 'excel' = 'csv') => 
-    api.get('/students/bulk-upload/template', {
+    api.get('/bulk-upload/template', {
       params: { format },
       responseType: 'blob',
     }),
@@ -2742,7 +2742,7 @@ export const studentAPI = {
     if (streamId) formData.append('streamId', streamId);
     formData.append('dryRun', 'true');
 
-    return api.post<BulkUploadResponse>('/students/bulk-upload', formData, {
+    return api.post<BulkUploadResponse>('/bulk-upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
