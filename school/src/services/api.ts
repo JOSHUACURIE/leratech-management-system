@@ -2410,48 +2410,204 @@ export const classAPI = {
 };
 
 // ==================== STUDENT API ====================
-export const studentAPI = {
-  // ============ EXISTING STUDENT APIs ============
-  getAll: (params?: {
-    search?: string;
-    classId?: string;
-    streamId?: string;
-    page?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    includeInactive?: boolean;
-  }) => api.get('/students', { params }),
+export interface BulkUploadResponse {
+  success: boolean;
+  message: string;
+  uploadId?: string;
+  status?: string;
+  estimatedTime?: string;
+  checkStatusUrl?: string;
+  websocketChannel?: string;
+  createdCount?: number;
+  duplicateCount?: number;
+  totalRows?: number;
+  processingTime?: string;
+  cacheHitRate?: string;
+  errors?: string[];
+  warnings?: string[];
+}
 
+export interface BulkUploadStatusResponse {
+  success: boolean;
+  uploadId: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  processed: number;
+  total: number;
+  failed: number;
+  eta: string;
+  cacheHitRate: string;
+  createdAt: string;
+  completedAt?: string;
+  error?: string;
+  result?: {
+    createdCount: number;
+    duplicateCount: number;
+    totalRows: number;
+    errors: string[];
+  };
+}
+
+export interface BulkUploadHistoryResponse {
+  uploads: Array<{
+    id: string;
+    fileName: string;
+    status: string;
+    totalRows: number;
+    createdCount: number;
+    duplicateCount: number;
+    createdAt: string;
+    completedAt?: string;
+    createdBy: string;
+    className: string;
+    streamName?: string;
+    academicYear: string;
+    term: string;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface StudentFilters {
+  search?: string;
+  classId?: string;
+  streamId?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  includeInactive?: boolean;
+  gender?: 'M' | 'F' | 'OTHER';
+  studentType?: 'day_scholar' | 'boarder';
+}
+
+export interface CreateStudentPayload {
+  firstName: string;
+  lastName: string;
+  admissionNumber: string;
+  classId: string;
+  streamId?: string | null;
+  subjectIds?: string[];
+  academicYearId: string;
+  termId: string;
+  dateOfBirth?: string | null;
+  gender?: string;
+  studentType?: string;
+  bloodGroup?: string | null;
+  allergies?: string | null;
+  medicalConditions?: string | null;
+  parentId?: string;
+  emergencyContact?: string;
+  previousSchool?: string;
+}
+
+export interface StudentResponse {
+  id: string;
+  firstName: string;
+  lastName: string;
+  admissionNumber: string;
+  classId: string;
+  streamId?: string;
+  academicYearId: string;
+  termId: string;
+  enrollmentDate: string;
+  isActive: boolean;
+  studentType: string;
+  gender?: string;
+  dateOfBirth?: string;
+  bloodGroup?: string;
+  allergies?: string;
+  medicalConditions?: string;
+  className?: string;
+  streamName?: string;
+  class?: {
+    id: string;
+    class_name: string;
+    class_level: number;
+  };
+  stream?: {
+    id: string;
+    name: string;
+  };
+  subjects?: Array<{
+    id: string;
+    name: string;
+    code: string;
+  }>;
+}
+export const studentAPI = {
+  // ============ BASIC CRUD OPERATIONS ============
+
+  /**
+   * Get all students with filters
+   */
+  getAll: (params?: StudentFilters) => 
+    api.get('/students', { params }),
+
+  /**
+   * Get student by ID
+   */
   getById: (id: string) => 
     api.get(`/students/${id}`),
 
-  create: (data: any) => 
+  /**
+   * Get student by admission number
+   */
+  getByAdmissionNumber: (admissionNumber: string) => 
+    api.get(`/students/admission/${admissionNumber}`),
+
+  /**
+   * Create single student
+   */
+  create: (data: CreateStudentPayload) => 
     api.post('/students', data),
 
-  update: (id: string, data: any) => 
+  /**
+   * Update student
+   */
+  update: (id: string, data: Partial<CreateStudentPayload>) => 
     api.put(`/students/${id}`, data),
 
+  /**
+   * Delete student
+   */
   delete: (id: string) => 
     api.delete(`/students/${id}`),
 
-  // ============ BULK UPLOAD APIs - 10X FASTER ============
+  /**
+   * Check if admission number is available
+   */
+  checkAdmissionNumber: (admissionNumber: string, schoolId?: string) => 
+    api.get('/students/check-admission', {
+      params: { admissionNumber, schoolId }
+    }),
+
+  // ============ BULK UPLOAD OPERATIONS - 10X FASTER ============
 
   /**
    * 🚀 BULK UPLOAD STUDENTS
    * Smart upload - automatically chooses sync/async based on file size
    * 
-   * @param file - CSV or Excel file
-   * @param classId - UUID of the class
-   * @param streamId - Optional UUID of the stream
+   * @param file - CSV or Excel file (.csv, .xlsx, .xls)
+   * @param classId - UUID of the target class
+   * @param streamId - Optional UUID of the target stream
    * @param dryRun - If true, only validate without inserting
    * 
-   * @returns For small files: Immediate result with created count
-   * @returns For large files: UploadId for status tracking
+   * @returns For files <5MB: Immediate result with createdCount
+   * @returns For files >5MB: UploadId for status tracking
    * 
-   * File size thresholds:
-   * - <5MB: Sync processing (instant response)
-   * - >5MB: Async processing (background with status tracking)
+   * @example
+   * // Small file - sync
+   * const response = await studentAPI.bulkUpload(file, 'class-123');
+   * console.log(response.data.createdCount); // 50
+   * 
+   * // Large file - async
+   * const response = await studentAPI.bulkUpload(file, 'class-123');
+   * console.log(response.data.uploadId); // 'abc-123'
    */
   bulkUpload: (
     file: File,
@@ -2465,24 +2621,28 @@ export const studentAPI = {
     if (streamId) formData.append('streamId', streamId);
     formData.append('dryRun', String(dryRun));
 
-    return api.post('/students/bulk-upload', formData, {
+    return api.post<BulkUploadResponse>('/students/bulk-upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 300000, // 5 minutes timeout for large files
+      timeout: 300000, // 5 minutes for large files
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          // Emit progress event for UI
-          window.dispatchEvent(new CustomEvent('bulk-upload-progress', {
-            detail: {
-              loaded: progressEvent.loaded,
-              total: progressEvent.total,
-              percentage: percentCompleted
-            }
-          }));
+          // Emit custom event for progress tracking
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('bulk-upload-progress', {
+                detail: {
+                  loaded: progressEvent.loaded,
+                  total: progressEvent.total,
+                  percentage: percentCompleted,
+                },
+              })
+            );
+          }
         }
-      }
+      },
     });
   },
 
@@ -2492,13 +2652,25 @@ export const studentAPI = {
    * 
    * @param uploadId - ID returned from bulkUpload
    * @returns Current status, progress, ETA, and results if completed
+   * 
+   * @example
+   * const status = await studentAPI.getBulkUploadStatus('abc-123');
+   * console.log(status.data.progress); // 45.5
+   * console.log(status.data.eta); // '2024-02-12T15:30:45.123Z'
    */
   getBulkUploadStatus: (uploadId: string) => 
-    api.get(`/students/bulk-upload/${uploadId}/status`),
+    api.get<BulkUploadStatusResponse>(`/students/bulk-upload/${uploadId}/status`),
 
   /**
    * 📋 GET ALL BULK UPLOADS
-   * Get history of bulk uploads for the school
+   * Get paginated history of bulk uploads for the school
+   * 
+   * @param params - Pagination and filter parameters
+   * @returns List of bulk uploads with statistics
+   * 
+   * @example
+   * const history = await studentAPI.getBulkUploads({ page: 1, limit: 10 });
+   * console.log(history.data.uploads); // Array of uploads
    */
   getBulkUploads: (params?: {
     page?: number;
@@ -2506,11 +2678,17 @@ export const studentAPI = {
     status?: 'queued' | 'processing' | 'completed' | 'failed';
     fromDate?: string;
     toDate?: string;
-  }) => api.get('/students/bulk-uploads', { params }),
+  }) => api.get<BulkUploadHistoryResponse>('/students/bulk-uploads', { params }),
 
   /**
    * 🛑 CANCEL BULK UPLOAD
-   * Cancel an ongoing bulk upload
+   * Cancel an ongoing bulk upload job
+   * 
+   * @param uploadId - ID of the upload to cancel
+   * @returns Success confirmation
+   * 
+   * @example
+   * await studentAPI.cancelBulkUpload('abc-123');
    */
   cancelBulkUpload: (uploadId: string) => 
     api.post(`/students/bulk-upload/${uploadId}/cancel`),
@@ -2521,17 +2699,37 @@ export const studentAPI = {
    * 
    * @param format - 'csv' (default) or 'excel'
    * @returns Blob file for download
+   * 
+   * @example
+   * // Download CSV template
+   * const response = await studentAPI.downloadTemplate('csv');
+   * const url = window.URL.createObjectURL(new Blob([response.data]));
+   * const link = document.createElement('a');
+   * link.href = url;
+   * link.download = 'student_template.csv';
+   * link.click();
    */
   downloadTemplate: (format: 'csv' | 'excel' = 'csv') => 
     api.get('/students/bulk-upload/template', {
       params: { format },
-      responseType: 'blob'
+      responseType: 'blob',
     }),
 
   /**
-   * 🔍 VALIDATE FILE
+   * ✅ VALIDATE FILE
    * Pre-validate a file before actual upload (dry run)
-   * Useful for checking file format and data quality
+   * Useful for checking file format, required columns, and data quality
+   * 
+   * @param file - CSV or Excel file to validate
+   * @param classId - Target class ID
+   * @param streamId - Optional target stream ID
+   * @returns Validation results with errors and warnings
+   * 
+   * @example
+   * const result = await studentAPI.validateFile(file, 'class-123');
+   * if (result.data.errors.length === 0) {
+   *   console.log('File is valid!');
+   * }
    */
   validateFile: (
     file: File,
@@ -2544,36 +2742,28 @@ export const studentAPI = {
     if (streamId) formData.append('streamId', streamId);
     formData.append('dryRun', 'true');
 
-    return api.post('/students/bulk-upload', formData, {
+    return api.post<BulkUploadResponse>('/students/bulk-upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 60000 // 1 minute for validation
+      timeout: 60000, // 1 minute for validation
     });
   },
 
-  // ============ ADVANCED STUDENT APIs ============
-
-  /**
-   * 🎯 GET STUDENT WITH FULL DETAILS
-   * Includes class, stream, fees, attendance, scores
-   */
-  getStudentDetails: (studentId: string) => 
-    api.get(`/students/${studentId}/details`),
-
-  /**
-   * 📊 GET STUDENT STATISTICS
-   * School/class level statistics
-   */
-  getStudentStatistics: (params?: {
-    classId?: string;
-    streamId?: string;
-    academicYearId?: string;
-  }) => api.get('/students/statistics', { params }),
+  // ============ BULK UPDATE OPERATIONS ============
 
   /**
    * 🔄 BULK UPDATE STUDENTS
-   * Update multiple students at once
+   * Update multiple students at once (class transfer, stream change, etc.)
+   * 
+   * @param data - Student IDs and updates to apply
+   * @returns Number of students updated
+   * 
+   * @example
+   * await studentAPI.bulkUpdate({
+   *   studentIds: ['id1', 'id2', 'id3'],
+   *   updates: { streamId: 'new-stream-123' }
+   * });
    */
   bulkUpdate: (data: {
     studentIds: string[];
@@ -2587,7 +2777,17 @@ export const studentAPI = {
 
   /**
    * 📤 EXPORT STUDENTS
-   * Export filtered students to CSV/Excel
+   * Export filtered students to CSV or Excel
+   * 
+   * @param params - Export format and filters
+   * @returns Blob file for download
+   * 
+   * @example
+   * const response = await studentAPI.exportStudents({
+   *   format: 'excel',
+   *   classId: 'class-123',
+   *   fields: ['admissionNumber', 'firstName', 'lastName']
+   * });
    */
   exportStudents: (params: {
     format: 'csv' | 'excel';
@@ -2597,26 +2797,25 @@ export const studentAPI = {
     fields?: string[];
   }) => api.get('/students/export', {
     params,
-    responseType: 'blob'
+    responseType: 'blob',
   }),
 
-  /**
-   * 🏷️ GET STUDENT BY ADMISSION NUMBER
-   */
-  getByAdmissionNumber: (admissionNumber: string) => 
-    api.get(`/students/admission/${admissionNumber}`),
-
-  /**
-   * ✅ CHECK ADMISSION NUMBER AVAILABILITY
-   */
-  checkAdmissionNumber: (admissionNumber: string, schoolId?: string) => 
-    api.get('/students/check-admission', {
-      params: { admissionNumber, schoolId }
-    }),
+  // ============ ADVANCED SEARCH ============
 
   /**
    * 🔍 SEARCH STUDENTS
-   * Advanced search with filters
+   * Advanced search with multiple filters
+   * 
+   * @param params - Search query and filters
+   * @returns Paginated student results
+   * 
+   * @example
+   * const results = await studentAPI.searchStudents({
+   *   query: 'John',
+   *   filters: { classId: 'class-123', gender: 'M' },
+   *   page: 1,
+   *   limit: 20
+   * });
    */
   searchStudents: (params: {
     query: string;
@@ -2631,10 +2830,36 @@ export const studentAPI = {
     limit?: number;
   }) => api.post('/students/search', params),
 
-  // ============ STUDENT ACADEMIC APIs ============
+  // ============ STUDENT DETAILS & ENRICHMENT ============
+
+  /**
+   * 🎯 GET STUDENT WITH FULL DETAILS
+   * Includes class, stream, fees, attendance, scores, and subjects
+   * 
+   * @param studentId - Student ID
+   * @returns Complete student profile
+   */
+  getStudentDetails: (studentId: string) => 
+    api.get(`/students/${studentId}/details`),
+
+  /**
+   * 📊 GET STUDENT STATISTICS
+   * School/class level statistics
+   * 
+   * @param params - Filters for statistics
+   * @returns Enrollment counts, gender distribution, etc.
+   */
+  getStudentStatistics: (params?: {
+    classId?: string;
+    streamId?: string;
+    academicYearId?: string;
+  }) => api.get('/students/statistics', { params }),
+
+  // ============ STUDENT ACADEMIC RECORDS ============
 
   /**
    * 📚 GET STUDENT SCORES
+   * Get all scores for a student
    */
   getStudentScores: (studentId: string, params?: {
     subjectId?: string;
@@ -2645,6 +2870,7 @@ export const studentAPI = {
 
   /**
    * 📊 GET STUDENT PERFORMANCE SUMMARY
+   * Aggregated performance metrics
    */
   getStudentPerformance: (studentId: string, params?: {
     termId?: string;
@@ -2653,6 +2879,7 @@ export const studentAPI = {
 
   /**
    * 📈 GET STUDENT PROGRESS OVER TIME
+   * Performance trends across terms
    */
   getStudentProgress: (studentId: string, params?: {
     subjectId?: string;
@@ -2660,10 +2887,11 @@ export const studentAPI = {
     toDate?: string;
   }) => api.get(`/students/${studentId}/progress`, { params }),
 
-  // ============ STUDENT ATTENDANCE APIs ============
+  // ============ STUDENT ATTENDANCE ============
 
   /**
    * 📅 GET STUDENT ATTENDANCE
+   * Get attendance records for a student
    */
   getAttendance: (studentId: string, params?: {
     fromDate?: string;
@@ -2673,22 +2901,25 @@ export const studentAPI = {
 
   /**
    * 📊 GET STUDENT ATTENDANCE SUMMARY
+   * Aggregated attendance statistics
    */
   getAttendanceSummary: (studentId: string, params?: {
     termId?: string;
     academicYearId?: string;
   }) => api.get(`/students/${studentId}/attendance/summary`, { params }),
 
-  // ============ STUDENT FEE APIs ============
+  // ============ STUDENT FEE MANAGEMENT ============
 
   /**
    * 💰 GET STUDENT FEE BALANCE
+   * Current outstanding balance
    */
   getFeeBalance: (studentId: string) => 
     api.get(`/students/${studentId}/fees/balance`),
 
   /**
    * 💳 GET STUDENT FEE TRANSACTIONS
+   * Payment history
    */
   getFeeTransactions: (studentId: string, params?: {
     page?: number;
@@ -2699,20 +2930,23 @@ export const studentAPI = {
 
   /**
    * 📋 GET STUDENT FEE STATEMENT
+   * Complete fee statement with QR code for verification
    */
   getFeeStatement: (studentId: string) => 
     api.get(`/students/${studentId}/fees/statement`),
 
-  // ============ STUDENT DOCUMENT APIs ============
+  // ============ STUDENT DOCUMENTS ============
 
   /**
    * 📎 GET STUDENT DOCUMENTS
+   * List all uploaded documents
    */
   getDocuments: (studentId: string) => 
     api.get(`/students/${studentId}/documents`),
 
   /**
    * 📤 UPLOAD STUDENT DOCUMENT
+   * Upload birth certificate, transcripts, etc.
    */
   uploadDocument: (studentId: string, file: File, type: string) => {
     const formData = new FormData();
@@ -2722,7 +2956,7 @@ export const studentAPI = {
     return api.post(`/students/${studentId}/documents`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-      }
+      },
     });
   },
 
@@ -2732,11 +2966,14 @@ export const studentAPI = {
   deleteDocument: (studentId: string, documentId: string) => 
     api.delete(`/students/${studentId}/documents/${documentId}`),
 
-  // ============ STUDENT PROMOTION APIs ============
+  // ============ STUDENT PROMOTION & TRANSFER ============
 
   /**
    * 📈 PROMOTE STUDENTS
    * Move students to next class
+   * 
+   * @param data - Promotion details
+   * @returns Promotion results
    */
   promoteStudents: (data: {
     studentIds: string[];
@@ -2759,7 +2996,7 @@ export const studentAPI = {
     reason?: string;
   }) => api.post('/students/transfer', data),
 
-  // ============ STUDENT GRADUATION APIs ============
+  // ============ STUDENT GRADUATION ============
 
   /**
    * 🎓 GRADUATE STUDENTS
@@ -2773,6 +3010,7 @@ export const studentAPI = {
 
   /**
    * 🏆 GET ALUMNI
+   * Get graduated students
    */
   getAlumni: (params?: {
     page?: number;
@@ -2781,28 +3019,43 @@ export const studentAPI = {
     search?: string;
   }) => api.get('/students/alumni', { params }),
 
+  // ============ STUDENT REPORTS ============
+
+  /**
+   * 📊 GENERATE STUDENT REPORT CARD
+   * Generate PDF report card
+   */
   generateReportCard: (studentId: string, params: {
     termId: string;
     academicYearId: string;
     format?: 'pdf' | 'html';
   }) => api.get(`/students/${studentId}/report-card`, {
     params,
-    responseType: 'blob'
+    responseType: 'blob',
   }),
 
   /**
    * 📋 GENERATE STUDENT PROFILE PDF
+   * Complete student profile as PDF
    */
   generateProfilePDF: (studentId: string) => 
     api.get(`/students/${studentId}/profile/pdf`, {
-      responseType: 'blob'
+      responseType: 'blob',
     }),
 
+  // ============ BULK OPERATIONS STATUS ============
 
+  /**
+   * 📊 GET BULK OPERATION DETAILS
+   * Get details of any bulk operation (upload, update, promote, etc.)
+   */
   getBulkOperationDetails: (operationId: string) => 
     api.get(`/students/bulk-operations/${operationId}`),
 
-
+  /**
+   * 📋 GET ALL BULK OPERATIONS
+   * Get history of all bulk operations
+   */
   getAllBulkOperations: (params?: {
     type?: 'upload' | 'update' | 'promote' | 'transfer' | 'graduate';
     status?: 'pending' | 'processing' | 'completed' | 'failed';
@@ -2810,6 +3063,7 @@ export const studentAPI = {
     limit?: number;
   }) => api.get('/students/bulk-operations', { params }),
 };
+
 
 export interface ScoreSubmissionResponse {
   success: boolean;
