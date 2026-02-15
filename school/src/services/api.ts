@@ -663,55 +663,194 @@ export interface BulkAttendanceUpdateData {
     reason?: string;
   }>;
 }
+// services/api.ts  –  Attendance API section
+// ──────────────────────────────────────────────────────────────────────────────
+// Every type mirrors exactly what the backend controller expects/returns.
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ─── Shared primitives ────────────────────────────────────────────────────────
+
+/** ISO-8601 date string, e.g. "2026-02-14" */
+type ISODate = string;
+
+/** UUID v4 string */
+type UUID = string;
+
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | 'sick';
+
+// ─── Request payloads ─────────────────────────────────────────────────────────
+
+/** One row inside markAttendance.attendanceData */
+export interface AttendanceEntry {
+  studentId: UUID;
+  status: AttendanceStatus;
+  /** Required by the backend when status is 'absent' | 'late' | 'sick' */
+  reason?: string;
+}
+
+/** POST /attendance/mark */
+export interface MarkAttendancePayload {
+  classId:        UUID;
+  streamId:       UUID;
+  subjectId:      UUID;          // required by backend (markAttendance validator)
+  attendanceDate: ISODate;       // "YYYY-MM-DD"
+  attendanceData: AttendanceEntry[];
+}
+
+/** GET /attendance/by-date */
+export interface GetAttendanceByDateParams {
+  classId:    UUID;
+  streamId:   UUID;
+  date:       ISODate;
+  /** Optional – omit to get all subjects */
+  subjectId?: UUID;
+}
+
+/** PATCH /attendance/:attendanceId  (single record) */
+export interface UpdateAttendancePayload {
+  status:   AttendanceStatus;
+  /** Required when status is 'absent' | 'late' | 'sick' */
+  reason?:  string;
+}
+
+/** PATCH /attendance/bulk/update */
+export interface BulkAttendanceUpdateEntry {
+  attendanceId: UUID;
+  status:       AttendanceStatus;
+  reason?:      string;
+}
+
+export interface BulkAttendanceUpdatePayload {
+  updates: BulkAttendanceUpdateEntry[];
+}
+
+// ─── Query param shapes ───────────────────────────────────────────────────────
+
+export interface StudentAttendanceParams {
+  startDate?: ISODate;
+  endDate?:   ISODate;
+  subjectId?: UUID;
+}
+
+export interface ClassAttendanceParams {
+  date?:      ISODate;
+  subjectId?: UUID;
+}
+
+export interface StreamAttendanceParams {
+  startDate?: ISODate;
+  endDate?:   ISODate;
+  subjectId?: UUID;
+}
+
+export interface AttendanceSummaryParams {
+  classId?:  UUID;
+  streamId?: UUID;
+  date?:     ISODate;
+}
+
+export interface DailyReportParams {
+  date?: ISODate;
+}
+
+export interface MonthlyReportParams {
+  year?:    string;    // e.g. "2026"
+  month?:   string;    // e.g. "2" (1-indexed)
+  classId?: UUID;
+}
+
+export interface StudentSummaryParams {
+  month?: string;   // 1-indexed
+  year?:  string;
+}
+
+// ─── API object ───────────────────────────────────────────────────────────────
 
 export const attendanceAPI = {
-  // Mark attendance
-  markAttendance: (data: AttendanceData) => 
+  /**
+   * Mark attendance for a whole stream in one batch.
+   * POST /attendance/mark
+   */
+  markAttendance: (data: MarkAttendancePayload) =>
     api.post('/attendance/mark', data),
 
-  // Get attendance by date
-  getAttendanceByDate: (params: AttendanceParams) => 
+  /**
+   * Fetch attendance records for a class/stream on a given date.
+   * Optionally filter by subject.
+   * GET /attendance/by-date
+   */
+  getAttendanceByDate: (params: GetAttendanceByDateParams) =>
     api.get('/attendance/by-date', { params }),
 
-  // Update single attendance record
-  updateAttendance: (attendanceId: string, data: AttendanceUpdateData) => 
-    api.put(`/attendance/${attendanceId}`, data),
+  /**
+   * Update a single attendance record (teacher or admin).
+   * PATCH /attendance/:attendanceId
+   */
+  updateAttendance: (attendanceId: UUID, data: UpdateAttendancePayload) =>
+    api.patch(`/attendance/${attendanceId}`, data),
 
-  // Get student attendance
-  getStudentAttendance: (studentId: string, params?: Omit<AttendanceParams, 'studentId'>) => 
+  /**
+   * Fetch all attendance records for a specific student.
+   * GET /attendance/student/:studentId
+   */
+  getStudentAttendance: (studentId: UUID, params?: StudentAttendanceParams) =>
     api.get(`/attendance/student/${studentId}`, { params }),
 
-  // Get class attendance
-  getClassAttendance: (classId: string, params?: Omit<AttendanceParams, 'classId'>) => 
+  /**
+   * Fetch attendance for an entire class on a given date.
+   * GET /attendance/class/:classId
+   */
+  getClassAttendance: (classId: UUID, params?: ClassAttendanceParams) =>
     api.get(`/attendance/class/${classId}`, { params }),
 
-  // Get stream attendance
-  getStreamAttendance: (streamId: string, params?: Omit<AttendanceParams, 'streamId'>) => 
+  /**
+   * Fetch attendance records for a stream over a date range.
+   * GET /attendance/stream/:streamId
+   */
+  getStreamAttendance: (streamId: UUID, params?: StreamAttendanceParams) =>
     api.get(`/attendance/stream/${streamId}`, { params }),
 
-  // Get attendance summary
-  getAttendanceSummary: (params: AttendanceParams) => 
+  /**
+   * Get a summary (total/marked/unmarked counts + rate) for a class or stream.
+   * GET /attendance/summary
+   */
+  getAttendanceSummary: (params: AttendanceSummaryParams) =>
     api.get('/attendance/summary', { params }),
 
-  // Bulk update attendance
-  bulkUpdateAttendance: (data: BulkAttendanceUpdateData) => 
-    api.put('/attendance/bulk/update', data),
+  /**
+   * Bulk-update multiple attendance records in one request.
+   * PATCH /attendance/bulk/update
+   *
+   * Note: changed from PUT to PATCH to match partial-update semantics.
+   * Align with your router definition.
+   */
+  bulkUpdateAttendance: (data: BulkAttendanceUpdatePayload) =>
+    api.patch('/attendance/bulk/update', data),
 
-  // Delete attendance record
-  deleteAttendance: (attendanceId: string) => 
+  /**
+   * Delete a single attendance record (admin only).
+   * DELETE /attendance/:attendanceId
+   */
+  deleteAttendance: (attendanceId: UUID) =>
     api.delete(`/attendance/${attendanceId}`),
 
-  // Reports
-  getDailyReport: (params?: { date?: string }) => 
+  // ── Reports ────────────────────────────────────────────────────────────────
+
+  /** GET /attendance/reports/daily */
+  getDailyReport: (params?: DailyReportParams) =>
     api.get('/attendance/reports/daily', { params }),
 
-  getMonthlyReport: (params?: { year?: string; month?: string; classId?: string }) => 
+  /** GET /attendance/reports/monthly */
+  getMonthlyReport: (params?: MonthlyReportParams) =>
     api.get('/attendance/reports/monthly', { params }),
 
-  getStudentAttendanceSummary: (studentId: string, params?: { month?: string; year?: string }) => 
+  /**
+   * Per-student attendance summary for a given month/year.
+   * GET /attendance/student/:studentId/summary
+   */
+  getStudentAttendanceSummary: (studentId: UUID, params?: StudentSummaryParams) =>
     api.get(`/attendance/student/${studentId}/summary`, { params }),
 };
-
 // ==================== TEACHER API ====================
 interface ScoreSubmissionData {
   studentId: string;
@@ -1904,7 +2043,509 @@ getRefundRequests: (params?: {
 
 }
 
+// ============================================
+// RESULTS API - Complete Type Definitions
+// ============================================
 
+// ====== RESULT TYPES ======
+export interface StudentResult {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  className: string;
+  streamName?: string;
+  termName: string;
+  academicYear: string;
+  totalMarks: number;
+  totalPoints: number;
+  meanPoints: number;
+  overallGrade: string;
+  rank: number;
+  totalStudents: number;
+  curriculum?: string;
+  subjects?: SubjectScore[];
+  previousRanks?: RankHistory[];
+  trend?: 'up' | 'down' | 'stable';
+  attendance?: number;
+}
+
+export interface SubjectScore {
+  subjectId: string;
+  subjectName: string;
+  score: number;
+  grade: string;
+  points: number;
+  classAverage?: number;
+  streamAverage?: number;
+  percentile?: number;
+  assessmentCount?: number;
+}
+
+export interface RankHistory {
+  termId: string;
+  termName: string;
+  rank: number;
+  meanPoints: number;
+}
+
+export interface PerformanceStats {
+  summary: {
+    classMeanPoints: string;
+    classMeanGrade: string;
+    totalStudents: number;
+    gradingSystemName: string;
+    passRate?: number;
+    distinctionRate?: number;
+    creditRate?: number;
+    topStudent?: {
+      name: string;
+      points: number;
+      stream: string;
+    };
+  };
+  data: {
+    subjectRanking: Array<{
+      subject: string;
+      subjectId?: string;
+      meanPoints: string;
+      meanGrade: string;
+      studentCount: number;
+      passRate?: number;
+      distinctionRate?: number;
+      streamBreakdown?: Array<{
+        streamName: string;
+        meanPoints: number;
+        meanGrade: string;
+      }>;
+    }>;
+    gradeDistribution: Array<{
+      grade: string;
+      count: number;
+      color: string;
+      percentage: number;
+    }>;
+    topPerformers: Array<{
+      name: string;
+      totalPoints: number;
+      stream?: string;
+      admission?: string;
+    }>;
+    streamComparison?: Array<{
+      streamId: string;
+      streamName: string;
+      meanPoints: number;
+      meanGrade: string;
+      studentCount: number;
+      rank: number;
+      passRate: number;
+      topStudent: string;
+      color?: string;
+    }>;
+    subjectHeatmap?: Array<{
+      subject: string;
+      streams: Array<{
+        streamName: string;
+        meanScore: number;
+      }>;
+    }>;
+    performanceTrend?: Array<{
+      term: string;
+      classMean: number;
+      streamAMean?: number;
+      streamBMean?: number;
+      streamCMean?: number;
+    }>;
+  };
+}
+
+export interface StreamPerformance {
+  stream: {
+    id: string;
+    name: string;
+    className: string;
+  };
+  summary: {
+    totalStudents: number;
+    classMean: string;
+  };
+  rankings: Array<{
+    studentId: string;
+    name: string;
+    admission: string;
+    meanPoints: number;
+    grade: string;
+    rank: number;
+  }>;
+  subjectPerformance: Array<{
+    subject: string;
+    meanPoints: string;
+    meanGrade: string;
+    studentCount: number;
+  }>;
+}
+
+export interface StudentDetailed {
+  id: string;
+  name: string;
+  admission: string;
+  class: string;
+  stream: string;
+  attendance: number;
+  subjects: Array<{
+    name: string;
+    score: number;
+    grade: string;
+    points: number;
+    classAvg: string;
+    percentile: number;
+  }>;
+  performanceTrend: Array<{
+    term: string;
+    meanPoints: number;
+    rank: number;
+  }>;
+  strengths: string[];
+  weaknesses: string[];
+  recommendations: string[];
+}
+
+export interface ClassRanking {
+  studentId: string;
+  totalMarks: number;
+  totalPoints: number;
+  meanPoints: string;
+  overallGrade: string;
+  systemType: string;
+}
+
+export interface GradeDistribution {
+  grade: string;
+  count: number;
+  color: string;
+  percentage: number;
+}
+
+// ====== FILTER TYPES ======
+export interface ResultsFilterParams {
+  classId?: string;
+  termId?: string;
+  gradingSystemId?: string;
+  streamId?: string;
+  studentId?: string;
+  curriculumId?: string;
+  includeSubjects?: boolean;
+  includeHistory?: boolean;
+  includeRecommendations?: boolean;
+  includeStreamComparison?: boolean;
+  includeHeatmap?: boolean;
+  type?: 'broadsheet' | 'stream' | 'individual' | 'class' | 'student';
+}
+
+export interface ResultsFilterOptions {
+  classes?: Array<{ class_id: string; class_name: string }>;
+  terms?: Array<{ term_id: string; term_name: string; academic_year: string }>;
+  streams?: Array<{ stream_id: string; stream_name: string }>;
+  gradingSystems?: Array<{ id: string; name: string }>;
+}
+
+// ====== RESULTS API ======
+export const resultsAPI = {
+  /**
+   * ============================================
+   * 📊 RESULTS RETRIEVAL & ANALYTICS
+   * ============================================
+   */
+
+  /**
+   * Get detailed class results with subjects and history
+   * GET /results/class-detailed
+   */
+  getClassResultsDetailed: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+    streamId?: string;
+    includeSubjects?: boolean;
+    includeHistory?: boolean;
+  }) => {
+    const response = await api.get<{ success: true; results: StudentResult[] }>('/results/class-detailed', { params });
+    return response;
+  },
+
+  /**
+   * Get enhanced class statistics with stream comparison and heatmaps
+   * GET /results/class-stats-enhanced
+   */
+  getClassStatsEnhanced: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+    streamId?: string;
+    includeStreamComparison?: boolean;
+    includeHeatmap?: boolean;
+  }) => {
+    const response = await api.get<{ success: true; summary: PerformanceStats['summary']; data: PerformanceStats['data'] }>(
+      '/results/class-stats-enhanced',
+      { params }
+    );
+    return response;
+  },
+
+  /**
+   * Get basic class performance statistics
+   * GET /results/class-performance-stats
+   */
+  getClassPerformanceStats: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+  }) => {
+    const response = await api.get<{
+      success: true;
+      summary: PerformanceStats['summary'];
+      data: {
+        subjectRanking: PerformanceStats['data']['subjectRanking'];
+        gradeDistribution: GradeDistribution[];
+        topPerformers: Array<{ name: string; totalPoints: number }>;
+      };
+    }>('/results/class-performance-stats', { params });
+    return response;
+  },
+
+  /**
+   * Get performance data for a specific stream
+   * GET /results/stream-performance
+   */
+  getStreamPerformance: async (params: {
+    streamId: string;
+    termId: string;
+    gradingSystemId: string;
+  }) => {
+    const response = await api.get<{ success: true; data: StreamPerformance }>('/results/stream-performance', { params });
+    return response;
+  },
+
+  /**
+   * Get detailed student profile with strengths, weaknesses, recommendations
+   * GET /results/student-detailed
+   */
+  getStudentDetailed: async (params: {
+    studentId: string;
+    termId: string;
+    gradingSystemId: string;
+    includeSubjects?: boolean;
+    includeHistory?: boolean;
+    includeRecommendations?: boolean;
+  }) => {
+    const response = await api.get<{ success: true; data: StudentDetailed }>('/results/student-detailed', { params });
+    return response;
+  },
+
+  /**
+   * Generate class-wide rankings
+   * GET /results/class-rankings
+   */
+  getClassRankings: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+  }) => {
+    const response = await api.get<{
+      success: true;
+      gradingStandard: string;
+      results: ClassRanking[];
+    }>('/results/class-rankings', { params });
+    return response;
+  },
+
+  /**
+   * ============================================
+   * 📈 PDF EXPORTS
+   * ============================================
+   */
+
+  /**
+   * Generate individual student result PDF
+   * GET /results/export/student-pdf
+   * Returns PDF blob
+   */
+  exportStudentPDF: async (params: {
+    studentId: string;
+    termId: string;
+    curriculumId?: string;
+    includeCBC?: boolean;
+  }) => {
+    const response = await api.get('/results/export/student-pdf', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * Generate class statistics PDF
+   * GET /results/export/class-pdf
+   * Returns PDF blob
+   */
+  exportClassPDF: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+    type?: 'class' | 'stream' | 'student';
+    studentId?: string;
+    streamId?: string;
+  }) => {
+    const response = await api.get('/results/export/class-pdf', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * Generate class statistics PDF (legacy)
+   * GET /results/export/stats-pdf
+   * Returns PDF blob
+   */
+  exportStatsPDF: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+  }) => {
+    const response = await api.get('/results/export/stats-pdf', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * ============================================
+   * 📊 EXCEL EXPORTS
+   * ============================================
+   */
+
+  /**
+   * Export results to Excel (broadsheet, stream, or individual)
+   * GET /results/export/excel
+   * Returns Excel blob
+   */
+  exportResultsExcel: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+    streamId?: string;
+    type?: 'broadsheet' | 'stream' | 'individual';
+  }) => {
+    const response = await api.get('/results/export/excel', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * Generate class broadsheet Excel (legacy)
+   * GET /results/export/broadsheet-excel
+   * Returns Excel blob
+   */
+  exportBroadsheetExcel: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+  }) => {
+    const response = await api.get('/results/export/broadsheet-excel', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * ============================================
+   * 🖨️ PRINT VIEW
+   * ============================================
+   */
+
+  /**
+   * Generate printer-friendly HTML view
+   * GET /results/print-view
+   * Returns HTML blob
+   */
+  getPrintView: async (params: {
+    classId: string;
+    termId: string;
+    gradingSystemId: string;
+    streamId?: string;
+  }) => {
+    const response = await api.get('/results/print-view', {
+      params,
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * ============================================
+   * ⚙️ ADMIN CONFIGURATION
+   * ============================================
+   */
+
+  /**
+   * Set overall system remarks for grades
+   * POST /results/set-remarks
+   */
+  setOverallSystemRemarks: async (data: {
+    gradingSystemId: string;
+    grade: string;
+    generalComment: string;
+  }) => {
+    const response = await api.post<{ success: true; message: string }>('/results/set-remarks', data);
+    return response;
+  },
+
+  /**
+   * ============================================
+   * 📋 UTILITY FUNCTIONS
+   * ============================================
+   */
+
+  /**
+   * Download blob as file with given filename
+   */
+  downloadBlob: (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  /**
+   * Generate filename for results based on filters
+   */
+  generateFilename: (type: string, params: ResultsFilterParams, studentName?: string): string => {
+    const date = new Date().toISOString().split('T')[0];
+    
+    if (type === 'student' && studentName) {
+      return `Academic_Report_${studentName.replace(/\s+/g, '_')}_${date}.pdf`;
+    }
+    
+    if (type === 'broadsheet') {
+      return `Broadsheet_Class_${params.classId}_Term_${params.termId}_${date}.xlsx`;
+    }
+    
+    if (type === 'stream' && params.streamId) {
+      return `Stream_${params.streamId}_Results_${date}.xlsx`;
+    }
+    
+    return `Results_Export_${date}.${type === 'pdf' ? 'pdf' : 'xlsx'}`;
+  }
+};
 export const teacherAPI = {
   // Assignments (Deprecated - use assignmentAPI instead)
   getMyAssignments: (params?: {
@@ -2295,7 +2936,19 @@ duplicateScheme: async (schemeId: string, data: DuplicateSchemeData = {}): Promi
       throw error;
     }
   },
-
+submitBulkScoresJUMA: async (data: {
+  assessmentId: string;
+  subjectId: string;
+  termId: string;
+  scores: Array<{
+    studentId: string;
+    score: number;
+    teacherNotes?: string;
+  }>;
+}) => {
+  const response = await api.post('/scores/bulk/juma', data);
+  return response;
+},
   // Get upcoming deadlines
   getUpcomingDeadlines: async (params = {}) => {
     try {

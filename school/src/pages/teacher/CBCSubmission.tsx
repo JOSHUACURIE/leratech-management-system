@@ -1,3 +1,4 @@
+// pages/teacher/CBCAssessment.tsx
 import React, { useEffect, useState } from "react";
 import Card from "../../components/common/Card";
 import { 
@@ -16,7 +17,11 @@ import {
   Filter,
   Save,
   RefreshCw,
-  ArrowLeft
+  ArrowLeft,
+  BookOpen,
+  GitBranch,
+  ListTree,
+  CheckSquare
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { cbcAPI } from '../../services/api';
@@ -59,12 +64,18 @@ interface TermOption {
   is_current: boolean;
 }
 
-interface SchemeTopic {
+interface Strand {
   id: string;
-  topic_title: string;
-  cbc_strand: string;
-  cbc_sub_strand: string;
-  week_number: number;
+  name: string;
+  code: string;
+  subStrands: SubStrand[];
+}
+
+interface SubStrand {
+  id: string;
+  name: string;
+  code: string;
+  strand_id: string;
 }
 
 interface AssessmentOption {
@@ -72,6 +83,16 @@ interface AssessmentOption {
   title: string;
   type: string;
   schemeTopicId?: string;
+  // CBC specific fields
+  strand_id?: string;
+  sub_strand_id?: string;
+}
+
+interface AssessmentConfig {
+  strandId: string;
+  subStrandId: string;
+  strandName: string;
+  subStrandName: string;
 }
 
 const levelConfig: Record<CBCLevel, { color: string; bg: string; border: string }> = {
@@ -83,12 +104,12 @@ const levelConfig: Record<CBCLevel, { color: string; bg: string; border: string 
 
 const CBCAssessment: React.FC = () => {
   const navigate = useNavigate();
- 
   
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [fetchingStreams, setFetchingStreams] = useState<boolean>(false);
   const [fetchingSubjects, setFetchingSubjects] = useState<boolean>(false);
+  const [fetchingStrands, setFetchingStrands] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
@@ -98,7 +119,13 @@ const CBCAssessment: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedTerm, setSelectedTerm] = useState("");
   const [selectedAssessment, setSelectedAssessment] = useState("");
-  const [selectedSchemeTopic, setSelectedSchemeTopic] = useState<SchemeTopic | null>(null);
+  
+  // NEW: Strand/Sub-strand states
+  const [showStrandModal, setShowStrandModal] = useState(false);
+  const [strands, setStrands] = useState<Strand[]>([]);
+  const [selectedStrand, setSelectedStrand] = useState("");
+  const [selectedSubStrand, setSelectedSubStrand] = useState("");
+  const [assessmentConfig, setAssessmentConfig] = useState<AssessmentConfig | null>(null);
   
   // Data states
   const [classes, setClasses] = useState<ClassOption[]>([]);
@@ -107,7 +134,6 @@ const CBCAssessment: React.FC = () => {
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [terms, setTerms] = useState<TermOption[]>([]);
   const [assessments, setAssessments] = useState<AssessmentOption[]>([]);
-  const [schemeTopics, setSchemeTopics] = useState<SchemeTopic[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -129,7 +155,6 @@ const CBCAssessment: React.FC = () => {
             const filtered = streamsRes.data.data.filter((stream: StreamOption) => stream.class_id === selectedClass);
             setFilteredStreams(filtered);
             
-            // Auto-select first stream if only one exists
             if (filtered.length === 1) {
               setSelectedStream(filtered[0].id);
             } else if (filtered.length === 0) {
@@ -189,12 +214,23 @@ const CBCAssessment: React.FC = () => {
     }
   }, [selectedSubject]);
 
+  // NEW: Fetch strands when subject changes
+  useEffect(() => {
+    if (selectedSubject) {
+      fetchStrandsForSubject(selectedSubject);
+    }
+  }, [selectedSubject]);
+
+  // NEW: Reset sub-strand when strand changes
+  useEffect(() => {
+    setSelectedSubStrand("");
+  }, [selectedStrand]);
+
   const fetchInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch classes and terms in parallel
       const [classesRes, termsRes] = await Promise.all([
         cbcAPI.getClasses(),
         cbcAPI.getTerms()
@@ -206,7 +242,6 @@ const CBCAssessment: React.FC = () => {
 
       if (termsRes.data.success) {
         setTerms(termsRes.data.data);
-        // Set current term by default
         const currentTerm = termsRes.data.data.find((term: TermOption) => term.is_current);
         if (currentTerm) {
           setSelectedTerm(currentTerm.id);
@@ -232,12 +267,6 @@ const CBCAssessment: React.FC = () => {
       if (assessmentsResponse.data.success) {
         setAssessments(assessmentsResponse.data.data);
         
-        // Also fetch scheme topics
-        const topicsResponse = await cbcAPI.getSchemeTopicsBySubject(subjectId);
-        if (topicsResponse.data.success) {
-          setSchemeTopics(topicsResponse.data.data);
-        }
-        
         if (assessmentsResponse.data.data.length > 0 && !selectedAssessment) {
           setSelectedAssessment(assessmentsResponse.data.data[0].id);
         }
@@ -252,26 +281,87 @@ const CBCAssessment: React.FC = () => {
     }
   };
 
+  // NEW: Fetch strands and sub-strands for subject
+  const fetchStrandsForSubject = async (subjectId: string) => {
+    try {
+      setFetchingStrands(true);
+      const strandsResponse = await cbcAPI.getStrandsBySubject(subjectId);
+      
+      if (strandsResponse.data.success) {
+        setStrands(strandsResponse.data.data);
+      } else {
+        setStrands([]);
+      }
+    } catch (error: any) {
+      console.error('Error fetching strands:', error);
+      setStrands([]);
+    } finally {
+      setFetchingStrands(false);
+    }
+  };
+
+  // NEW: Handle assessment selection - show modal if strand/sub-strand needed
+  const handleAssessmentSelect = (assessmentId: string) => {
+    setSelectedAssessment(assessmentId);
+    
+    // Check if assessment already has strand/sub-strand configured
+    const assessment = assessments.find(a => a.id === assessmentId);
+    
+    // If assessment doesn't have strand/sub-strand, show modal
+    if (assessment && (!assessment.strand_id || !assessment.sub_strand_id)) {
+      setShowStrandModal(true);
+    } else if (assessment) {
+      // Assessment already configured
+      setAssessmentConfig({
+        strandId: assessment.strand_id!,
+        subStrandId: assessment.sub_strand_id!,
+        strandName: "", // Would need to fetch names
+        subStrandName: ""
+      });
+    }
+  };
+
+  // NEW: Confirm strand/sub-strand selection
+  const handleConfirmStrandSelection = () => {
+    if (!selectedStrand || !selectedSubStrand) {
+      setError("Please select both strand and sub-strand");
+      return;
+    }
+
+    const strand = strands.find(s => s.id === selectedStrand);
+    const subStrand = strand?.subStrands.find(ss => ss.id === selectedSubStrand);
+
+    setAssessmentConfig({
+      strandId: selectedStrand,
+      subStrandId: selectedSubStrand,
+      strandName: strand?.name || "",
+      subStrandName: subStrand?.name || ""
+    });
+
+    setShowStrandModal(false);
+  };
+
   const fetchStudentsForMarking = async () => {
     try {
       setLoading(true);
       setError(null);
       setStudents([]);
 
-      // Validate required selections
-      if (!selectedClass || !selectedStream || !selectedAssessment) {
-        setError("Please select Class, Stream, and Assessment");
+      // Validate required selections including strand/sub-strand
+      if (!selectedClass || !selectedStream || !selectedAssessment || !assessmentConfig) {
+        setError("Please complete all selections including strand and sub-strand");
         return;
       }
 
       const studentsResponse = await cbcAPI.getStudentsForMarking({
         assessmentId: selectedAssessment,
-        streamId: selectedStream
+        streamId: selectedStream,
+        strandId: assessmentConfig.strandId,
+        subStrandId: assessmentConfig.subStrandId
       });
 
       if (studentsResponse.data.success) {
         const apiStudents: Student[] = studentsResponse.data.data.map((student: any) => {
-          // Map CBC level from score (1-4) to text level
           const score = student.currentEvaluation?.score;
           let level: CBCLevel | "" = "";
           
@@ -279,7 +369,7 @@ const CBCAssessment: React.FC = () => {
             if (score >= 3.5) level = "Exceeding Expectation";
             else if (score >= 2.5) level = "Meeting Expectation";
             else if (score >= 1.5) level = "Approaching Expectation";
-            else if (score >= 1) level = "Below Expectation";
+            else level = "Below Expectation";
           }
 
           return {
@@ -307,7 +397,6 @@ const CBCAssessment: React.FC = () => {
     } catch (error: any) {
       console.error('Error fetching students:', error);
       
-      // Handle specific error cases
       if (error.response?.status === 404) {
         setError("No learners found for the selected criteria");
       } else if (error.response?.status === 403) {
@@ -338,7 +427,6 @@ const CBCAssessment: React.FC = () => {
       setError(null);
       setSuccessMessage(null);
 
-      // Map level text back to numeric score (1-4)
       const levelToScore = (level: CBCLevel): number => {
         switch(level) {
           case "Exceeding Expectation": return 4;
@@ -349,7 +437,6 @@ const CBCAssessment: React.FC = () => {
         }
       };
 
-      // Filter students with new assessments
       const scoresToSubmit = students
         .filter(student => {
           const hasLevel = student.level !== "";
@@ -364,7 +451,9 @@ const CBCAssessment: React.FC = () => {
           teacherNotes: student.comment || "",
           termId: selectedTerm,
           classId: selectedClass,
-          streamId: selectedStream
+          streamId: selectedStream,
+          strandId: assessmentConfig?.strandId,
+          subStrandId: assessmentConfig?.subStrandId
         }));
 
       if (scoresToSubmit.length === 0) {
@@ -372,13 +461,11 @@ const CBCAssessment: React.FC = () => {
         return;
       }
 
-      // Submit scores
       const response = await cbcAPI.submitScoresBatch(scoresToSubmit);
       
       if (response.data.success) {
         setSuccessMessage(`Successfully submitted ${scoresToSubmit.length} assessments`);
         
-        // Update local state with new scores from successful submissions
         setStudents(prev => prev.map(student => {
           const submittedStudent = scoresToSubmit.find(s => s.studentId === student.id);
           if (submittedStudent) {
@@ -396,7 +483,6 @@ const CBCAssessment: React.FC = () => {
     } catch (error: any) {
       console.error('Error submitting assessments:', error);
       
-      // Provide user-friendly error messages
       if (error.response?.status === 403) {
         setError("You don't have permission to submit assessments");
       } else if (error.response?.data?.error) {
@@ -415,6 +501,9 @@ const CBCAssessment: React.FC = () => {
     setSelectedStream("");
     setSelectedAssessment("");
     setSelectedSubject("");
+    setSelectedStrand("");
+    setSelectedSubStrand("");
+    setAssessmentConfig(null);
     fetchInitialData();
   };
 
@@ -426,13 +515,11 @@ const CBCAssessment: React.FC = () => {
     return "Below Expectation";
   };
 
-  // Filter students based on search
   const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     student.admissionNo.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Calculate statistics
   const evaluatedCount = students.filter(s => s.level !== "").length;
   const pendingCount = students.filter(s => s.level === "").length;
   const changedCount = students.filter(s => {
@@ -442,7 +529,6 @@ const CBCAssessment: React.FC = () => {
     return hasLevel && (levelChanged || commentChanged);
   }).length;
 
-  // Get selected names for display
   const selectedSubjectName = subjects.find(s => s.id === selectedSubject)?.name || "";
   const selectedClassName = classes.find(c => c.id === selectedClass)?.name || "";
   const selectedStreamName = streams.find(s => s.id === selectedStream)?.name || "";
@@ -463,7 +549,7 @@ const CBCAssessment: React.FC = () => {
 
   return (
     <div className="p-6 bg-[#F8FAFC] min-h-screen space-y-8">
-      {/* Header */}
+      {/* Header - unchanged */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <button 
@@ -481,6 +567,20 @@ const CBCAssessment: React.FC = () => {
               {selectedStreamName && <span className="ml-2">Stream: <span className="font-medium">{selectedStreamName}</span></span>}
               {selectedTermName && <span className="ml-2">Term: <span className="font-medium">{selectedTermName}</span></span>}
             </p>
+          )}
+          {/* NEW: Show selected strand/sub-strand */}
+          {assessmentConfig && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full flex items-center gap-1">
+                <GitBranch size={12} />
+                {assessmentConfig.strandName}
+              </span>
+              <ChevronRight size={12} className="text-slate-400" />
+              <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full flex items-center gap-1">
+                <ListTree size={12} />
+                {assessmentConfig.subStrandName}
+              </span>
+            </div>
           )}
         </div>
         
@@ -502,7 +602,7 @@ const CBCAssessment: React.FC = () => {
         )}
       </div>
 
-      {/* Error/Success Messages */}
+      {/* Error/Success Messages - unchanged */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center justify-between animate-fadeIn">
           <div className="flex items-center gap-3">
@@ -631,7 +731,7 @@ const CBCAssessment: React.FC = () => {
             <select 
               className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all cursor-pointer disabled:opacity-50"
               value={selectedAssessment}
-              onChange={e => setSelectedAssessment(e.target.value)}
+              onChange={e => handleAssessmentSelect(e.target.value)}
               disabled={!selectedSubject || assessments.length === 0 || submitting}
             >
               <option value="">{assessments.length === 0 ? "No assessments" : "Select Assessment..."}</option>
@@ -644,8 +744,8 @@ const CBCAssessment: React.FC = () => {
           </div>
         </div>
 
-        {/* Load Students Button */}
-        {selectedClass && selectedStream && selectedSubject && selectedAssessment && (
+        {/* Load Students Button - Only enabled when strand/sub-strand selected */}
+        {selectedClass && selectedStream && selectedSubject && selectedAssessment && assessmentConfig && (
           <button
             onClick={fetchStudentsForMarking}
             disabled={loading || submitting}
@@ -680,9 +780,128 @@ const CBCAssessment: React.FC = () => {
         )}
       </Card>
 
-      {/* Assessment Table */}
+      {/* NEW: Strand/Sub-strand Modal */}
+      {showStrandModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-8 shadow-2xl animate-slideUp">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                  <BookOpen className="text-emerald-600" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-800">Configure Assessment</h2>
+                  <p className="text-sm text-slate-500">Select strand and sub-strand for this assessment</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStrandModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+
+            {fetchingStrands ? (
+              <div className="py-12 text-center">
+                <Loader2 size={32} className="animate-spin text-emerald-500 mx-auto mb-4" />
+                <p className="text-slate-600 font-medium">Loading strands...</p>
+              </div>
+            ) : strands.length === 0 ? (
+              <div className="py-12 text-center">
+                <AlertCircle size={32} className="text-amber-500 mx-auto mb-4" />
+                <p className="text-slate-600 font-medium">No strands found for this subject</p>
+                <p className="text-sm text-slate-400 mt-2">Please configure strands in the curriculum setup</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Strand Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">
+                    Strand <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={selectedStrand}
+                    onChange={(e) => setSelectedStrand(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                  >
+                    <option value="">Select Strand...</option>
+                    {strands.map(strand => (
+                      <option key={strand.id} value={strand.id}>
+                        {strand.name} ({strand.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sub-Strand Selection */}
+                {selectedStrand && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">
+                      Sub-strand <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedSubStrand}
+                      onChange={(e) => setSelectedSubStrand(e.target.value)}
+                      className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                    >
+                      <option value="">Select Sub-strand...</option>
+                      {strands
+                        .find(s => s.id === selectedStrand)
+                        ?.subStrands.map(sub => (
+                          <option key={sub.id} value={sub.id}>
+                            {sub.name} ({sub.code})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShowStrandModal(false)}
+                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmStrandSelection}
+                    disabled={!selectedStrand || !selectedSubStrand}
+                    className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <CheckSquare size={16} />
+                    Confirm Selection
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Assessment Table - unchanged but shows strand context */}
       {students.length > 0 ? (
         <Card className="border-none shadow-2xl shadow-slate-200/60 rounded-[3rem] p-0 overflow-hidden bg-white">
+          {/* Assessment Context Header - NEW */}
+          {assessmentConfig && (
+            <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-blue-50 border-b border-emerald-100">
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <GitBranch size={14} className="text-emerald-600" />
+                  <span className="font-medium text-emerald-700">Strand:</span>
+                  <span className="text-slate-700">{assessmentConfig.strandName}</span>
+                </div>
+                <div className="w-px h-4 bg-emerald-200"></div>
+                <div className="flex items-center gap-2">
+                  <ListTree size={14} className="text-blue-600" />
+                  <span className="font-medium text-blue-700">Sub-strand:</span>
+                  <span className="text-slate-700">{assessmentConfig.subStrandName}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -847,7 +1066,6 @@ const CBCAssessment: React.FC = () => {
             </table>
           </div>
 
-          {/* Table Footer */}
           <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="text-sm text-slate-600">
               Showing <span className="font-semibold">{filteredStudents.length}</span> of <span className="font-semibold">{students.length}</span> learners
@@ -869,7 +1087,6 @@ const CBCAssessment: React.FC = () => {
           </div>
         </Card>
       ) : (
-        /* Empty State */
         <Card className="border-none shadow-xl shadow-slate-200/50 rounded-2xl p-8 text-center">
           <div className="max-w-md mx-auto py-8">
             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -877,8 +1094,9 @@ const CBCAssessment: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-700 mb-2">No Learners Loaded</h3>
             <p className="text-slate-500 mb-6">
-              Select a class, stream, subject, and assessment to load learners for CBC assessment.
-              Make sure all required fields are selected in the panel above.
+              {!assessmentConfig 
+                ? "Please configure strand and sub-strand for this assessment first."
+                : "Select a class, stream, subject, and assessment to load learners for CBC assessment."}
             </p>
             {(!selectedClass || !selectedStream || !selectedSubject || !selectedAssessment) && (
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-medium">
@@ -890,7 +1108,7 @@ const CBCAssessment: React.FC = () => {
         </Card>
       )}
 
-      {/* Help Section */}
+      {/* Help Section - unchanged */}
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200">
           <h4 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
@@ -923,10 +1141,10 @@ const CBCAssessment: React.FC = () => {
             Assessment Notes
           </h4>
           <ul className="text-xs text-slate-600 space-y-1">
+            <li>• Strand & sub-strand must be selected for each assessment</li>
             <li>• Use observations to note specific competencies</li>
             <li>• Assessments are saved immediately upon submission</li>
             <li>• You can edit assessments before final submission</li>
-            <li>• Level indicators pulse when changed</li>
           </ul>
         </div>
         
@@ -939,7 +1157,7 @@ const CBCAssessment: React.FC = () => {
             <li>• Click EE/ME/AE/BE buttons to set levels</li>
             <li>• Add observations for each learner</li>
             <li>• Submit all changed assessments at once</li>
-            <li>• Use Refresh button to reset selections</li>
+            <li>• Strand/Sub-strand context shown in assessment</li>
           </ul>
         </div>
       </div>

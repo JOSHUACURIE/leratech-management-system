@@ -1,3 +1,4 @@
+// pages/teacher/ScoreSubmission.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import Card from "../../components/common/Card";
@@ -56,6 +57,9 @@ interface AssessmentOption {
   title: string;
   max_score: number;
   type: string;
+  // Add these fields for proper UUID handling
+  uuid?: string; // The actual UUID without suffix
+  displayId?: string; // The full ID with suffix for display
 }
 
 interface TermOption {
@@ -63,6 +67,14 @@ interface TermOption {
   name: string;
   is_current: boolean;
 }
+
+// Helper function to extract UUID from assessment ID
+const extractUUID = (assessmentId: string): string => {
+  if (!assessmentId) return "";
+  // Match UUID pattern (8-4-4-4-12)
+  const match = assessmentId.match(/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/);
+  return match ? match[1] : assessmentId;
+};
 
 const ScoreSubmission: React.FC = () => {
   const navigate = useNavigate();
@@ -257,17 +269,26 @@ const ScoreSubmission: React.FC = () => {
                   
                   if (hasSubject) {
                     // Create assessment entries based on assignment
+                    // Store both the full ID (with suffix) and the UUID
+                    const examId = `${assignment.id}-exam`;
+                    const testId = `${assignment.id}-test`;
+                    
                     subjectAssessments.push({
-                      id: `${assignment.id}-exam`,
+                      id: examId, // Keep full ID for selection
+                      uuid: assignment.id, // Store UUID for API calls
                       title: 'Term Exam',
                       max_score: 100,
-                      type: 'exam'
+                      type: 'exam',
+                      displayId: examId
                     });
+                    
                     subjectAssessments.push({
-                      id: `${assignment.id}-test`,
+                      id: testId,
+                      uuid: assignment.id,
                       title: 'Class Test',
                       max_score: 50,
-                      type: 'test'
+                      type: 'test',
+                      displayId: testId
                     });
                   }
                 }
@@ -325,14 +346,11 @@ const ScoreSubmission: React.FC = () => {
         
         // Transform to our Student interface
         const apiStudents: Student[] = classStudents.map((student: any) => {
-          // Check if student already has a score for this assessment
-          // Note: You would need to fetch existing scores separately
-          // For now, we'll assume no existing scores
           return {
             studentId: student.id,
             admissionNumber: student.admission_number,
             fullName: `${student.first_name} ${student.last_name}`,
-            existingScore: "", // You would fetch this from scores table
+            existingScore: "",
             existingNotes: "",
             score: "",
             grade: "",
@@ -465,103 +483,195 @@ const ScoreSubmission: React.FC = () => {
         return;
       }
 
-      // Submit scores to API
-      const submissionPromises = studentsToSubmit.map(student => 
-        teacherAPI.submitScore({
+      // Show loading toast or indicator
+      console.log(`🚀 JUMA Processing ${studentsToSubmit.length} scores...`);
+
+      // Find the selected assessment to get its UUID
+      const selectedAssessmentObj = assessments.find(a => a.id === selectedAssessment);
+      
+      // IMPORTANT FIX: Extract UUID from assessment ID
+      // If we have a stored UUID, use that, otherwise extract from the ID
+      const assessmentUUID = selectedAssessmentObj?.uuid || extractUUID(selectedAssessment);
+      
+      console.log('📋 Assessment details:', {
+        selectedId: selectedAssessment,
+        extractedUUID: assessmentUUID,
+        originalObj: selectedAssessmentObj
+      });
+
+      // PREPARE BULK PAYLOAD FOR JUMA - using UUID without suffix
+      const bulkPayload = {
+        assessmentId: assessmentUUID, // Send only the UUID part
+        subjectId: selectedSubject,
+        termId: selectedTerm,
+        scores: studentsToSubmit.map(student => ({
           studentId: student.studentId,
-          subjectId: selectedSubject,
-          termId: selectedTerm,
-          assessmentId: selectedAssessment,
-          score: Number(student.score), // Convert to number
+          score: Number(student.score),
           teacherNotes: student.existingNotes || ""
-        })
-      );
+        }))
+      };
 
-      // Execute submissions in batches to avoid overwhelming the server
-      const BATCH_SIZE = 5;
-      const results: any[] = [];
-      
-      for (let i = 0; i < submissionPromises.length; i += BATCH_SIZE) {
-        const batch = submissionPromises.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.allSettled(batch);
-        
-        // Process batch results
-        batchResults.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            results.push(result.value);
-          } else {
-            // Handle rejected promise
-            console.error('Submission failed:', result.reason);
-            results.push({
-              data: {
-                success: false,
-                error: result.reason?.message || 'Submission failed'
-              }
-            });
-          }
-        });
-        
-        // Small delay between batches
-        if (i + BATCH_SIZE < submissionPromises.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
+      console.log('📦 Sending payload:', bulkPayload);
 
-      // Check results
-      const successfulSubmissions = results.filter(result => result.data?.success);
-      const failedSubmissions = results.filter(result => !result.data?.success);
-      
-      if (successfulSubmissions.length > 0) {
-        setSuccessMessage(`Successfully submitted ${successfulSubmissions.length} scores`);
+      // SINGLE BULK API CALL
+      const response = await teacherAPI.submitBulkScoresJUMA(bulkPayload);
+
+      if (response.data.success) {
+        const result = response.data;
         
-        // Update local state with new grades from successful submissions
+        // Format success message with performance metrics
+        const processingTime = (result.meta.processingTime / 1000).toFixed(2);
+        const throughput = result.meta.throughput;
+        
+        setSuccessMessage(
+          `✅ JUMA processed ${result.data.totalProcessed} scores in ${processingTime}s ` +
+          `(${throughput}) with ${result.meta.cacheHitRate} cache hit rate`
+        );
+
+        // Create a map of submitted scores for quick lookup
+        const submittedMap = new Map(
+          studentsToSubmit.map((s) => [
+            s.studentId, 
+            {
+              ...s,
+              grade: calculateGrade(Number(s.score)),
+              points: calculatePoints(Number(s.score))
+            }
+          ])
+        );
+
+        // Update local state with results
         setStudents(prev => prev.map(student => {
-          const studentIndex = studentsToSubmit.findIndex(s => s.studentId === student.studentId);
-          if (studentIndex >= 0 && successfulSubmissions[studentIndex]?.data?.data) {
-            const resultData = successfulSubmissions[studentIndex].data.data;
+          const submitted = submittedMap.get(student.studentId);
+          if (submitted) {
             return {
               ...student,
-              existingScore: student.score, // Save current score as existing
-              grade: resultData.grade,
-              points: resultData.points,
-              remarks: resultData.remarks
+              existingScore: student.score,
+              grade: submitted.grade,
+              points: submitted.points,
+              remarks: "Saved"
             };
           }
           return student;
         }));
-      }
-      
-      if (failedSubmissions.length > 0) {
-        const errorMessages = failedSubmissions
-          .map(f => f.data?.error || 'Unknown error')
-          .filter(msg => msg)
-          .join(', ');
-        
-        setError(`${failedSubmissions.length} scores failed: ${errorMessages}`);
-      }
-      
-      // Clear success message after 5 seconds
-      if (successfulSubmissions.length > 0) {
+
+        // Show detailed summary
+        console.log('📊 JUMA Submission Summary:', {
+          totalProcessed: result.data.totalProcessed,
+          newScores: result.data.newScores,
+          updatedScores: result.data.updatedScores,
+          batches: result.data.batches,
+          processingTime: `${processingTime}s`,
+          throughput: result.meta.throughput,
+          cacheHitRate: result.meta.cacheHitRate
+        });
+
+        // Auto-clear success message after 5 seconds
         setTimeout(() => setSuccessMessage(null), 5000);
       }
-    } catch (error: any) {
-      console.error('Error submitting scores:', error);
       
-      // Provide user-friendly error messages
-      if (error.response?.status === 403) {
-        setError("You don't have permission to submit scores for this assessment");
-      } else if (error.response?.status === 400) {
-        setError("Invalid score values. Please check all scores are between 0-100");
-      } else if (error.response?.data?.error) {
-        setError(error.response.data.error);
-      } else if (error.message) {
+    } catch (error: any) {
+      console.error('❌ JUMA Submission Error:', error);
+      
+      // Handle JUMA-specific error responses
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        if (errorData.partialSuccess) {
+          setError(
+            `⚠️ Partial success: ${errorData.data?.newScores || 0} saved, ` +
+            `${errorData.data?.failed?.length || 0} failed. ` +
+            `Please check and retry failed entries.`
+          );
+          
+          if (errorData.data?.successful) {
+            const successfulIds = new Set(errorData.data.successful.map(s => s.studentId));
+            
+            setStudents(prev => prev.map(student => {
+              if (successfulIds.has(student.studentId) && student.score !== "") {
+                return {
+                  ...student,
+                  existingScore: student.score,
+                  remarks: "Saved"
+                };
+              }
+              return student;
+            }));
+          }
+        } 
+        else if (errorData.errors && Array.isArray(errorData.errors)) {
+          const errorMessages = errorData.errors.map(e => 
+            `Row ${e.row}: ${e.error}`
+          ).join('. ');
+          
+          setError(`Validation failed: ${errorMessages}`);
+          
+          // Highlight invalid rows
+          highlightInvalidRows(errorData.errors);
+        }
+        else if (errorData.error) {
+          setError(errorData.error);
+        } else {
+          setError("Failed to submit scores. Please try again.");
+        }
+      } 
+      else if (error.message) {
         setError(error.message);
-      } else {
+      } 
+      else {
         setError("Failed to submit scores. Please check your connection and try again.");
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Helper function to calculate grade (can also come from API response)
+  const calculateGrade = (score: number): string => {
+    if (score >= 80) return 'A';
+    if (score >= 75) return 'A-';
+    if (score >= 70) return 'B+';
+    if (score >= 65) return 'B';
+    if (score >= 60) return 'B-';
+    if (score >= 55) return 'C+';
+    if (score >= 50) return 'C';
+    if (score >= 45) return 'C-';
+    if (score >= 40) return 'D+';
+    if (score >= 35) return 'D';
+    if (score >= 30) return 'D-';
+    return 'E';
+  };
+
+  // Helper function to calculate points
+  const calculatePoints = (score: number): number => {
+    if (score >= 80) return 12;
+    if (score >= 75) return 11;
+    if (score >= 70) return 10;
+    if (score >= 65) return 9;
+    if (score >= 60) return 8;
+    if (score >= 55) return 7;
+    if (score >= 50) return 6;
+    if (score >= 45) return 5;
+    if (score >= 40) return 4;
+    if (score >= 35) return 3;
+    if (score >= 30) return 2;
+    return 1;
+  };
+
+  // Helper function to highlight invalid rows (optional)
+  const highlightInvalidRows = (errors: any[]) => {
+    // Reset all highlights first
+    document.querySelectorAll('.invalid-score').forEach(el => {
+      el.classList.remove('invalid-score', 'bg-red-50', 'border-red-300');
+    });
+    
+    // Highlight invalid rows
+    errors.forEach(error => {
+      const rowElement = document.querySelector(`[data-row="${error.row}"]`);
+      if (rowElement) {
+        rowElement.classList.add('invalid-score', 'bg-red-50', 'border-red-300');
+      }
+    });
   };
 
   const handleRefresh = () => {
@@ -589,7 +699,8 @@ const ScoreSubmission: React.FC = () => {
 
   // Get selected subject name for display
   const selectedSubjectName = subjects.find(s => s.id === selectedSubject)?.name || "";
-  const selectedAssessmentTitle = assessments.find(a => a.id === selectedAssessment)?.title || "";
+  const selectedAssessmentObj = assessments.find(a => a.id === selectedAssessment);
+  const selectedAssessmentTitle = selectedAssessmentObj?.title || "";
   const selectedClassName = classes.find(c => c.id === selectedClass)?.name || "";
   const selectedStreamName = streams.find(s => s.id === selectedStream)?.name || "";
 
@@ -881,8 +992,8 @@ const ScoreSubmission: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredStudents.map((student) => (
-                      <tr key={student.studentId} className="hover:bg-slate-50/50 transition-colors">
+                    {filteredStudents.map((student, index) => (
+                      <tr key={student.studentId} className="hover:bg-slate-50/50 transition-colors" data-row={index + 1}>
                         <td className="px-6 py-4">
                           <span className="text-sm font-medium text-slate-700 font-mono">
                             {student.admissionNumber}
@@ -924,17 +1035,24 @@ const ScoreSubmission: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                              ${student.grade === 'A' ? 'bg-emerald-100 text-emerald-800' :
-                                student.grade === 'B' ? 'bg-blue-100 text-blue-800' :
-                                student.grade === 'C' ? 'bg-amber-100 text-amber-800' :
-                                student.grade === 'D' ? 'bg-orange-100 text-orange-800' :
-                                student.grade === 'E' ? 'bg-rose-100 text-rose-800' :
-                                'bg-slate-100 text-slate-800'
-                              }`}
-                            >
-                              {student.grade || '-'}
-                            </span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            ${student.grade === 'A' ? 'bg-emerald-100 text-emerald-800' :
+                              student.grade === 'A-' ? 'bg-emerald-100 text-emerald-800' :
+                              student.grade === 'B+' ? 'bg-blue-100 text-blue-800' :
+                              student.grade === 'B' ? 'bg-blue-100 text-blue-800' :
+                              student.grade === 'B-' ? 'bg-blue-100 text-blue-800' :
+                              student.grade === 'C+' ? 'bg-amber-100 text-amber-800' :
+                              student.grade === 'C' ? 'bg-amber-100 text-amber-800' :
+                              student.grade === 'C-' ? 'bg-amber-100 text-amber-800' :
+                              student.grade === 'D+' ? 'bg-orange-100 text-orange-800' :
+                              student.grade === 'D' ? 'bg-orange-100 text-orange-800' :
+                              student.grade === 'D-' ? 'bg-orange-100 text-orange-800' :
+                              student.grade === 'E' ? 'bg-rose-100 text-rose-800' :
+                              'bg-slate-100 text-slate-800'
+                            }`}
+                          >
+                            {student.grade || '-'}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
