@@ -1,5 +1,4 @@
-// pages/admin/ResultsPerformance.tsx
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { 
   TrendingUp, 
   Award, 
@@ -54,8 +53,6 @@ import api, {
   type ClassOption,
   type StreamOption,
   type TermOption,
-  // These types are not exported, so we'll use inline interfaces or import from elsewhere
-  // AcademicYearOption, CurriculumOption, GradingSystem
 } from "../../services/api";
 import {
   LineChart as ReLineChart,
@@ -83,7 +80,7 @@ import {
 } from 'recharts';
 
 // ============================================
-// LOCAL TYPE DEFINITIONS (for missing exports)
+// LOCAL TYPE DEFINITIONS
 // ============================================
 
 interface AcademicYearOption {
@@ -123,7 +120,17 @@ interface GradingSystem {
   }>;
 }
 
-// Extended PerformanceStats for component use
+interface ClassOptionWithStreams extends ClassOption {
+  streamCount: number;
+  total_streams?: number;
+}
+
+interface StreamOptionWithCount extends StreamOption {
+  studentCount?: number;
+  student_count?: number;
+  class_id: string;
+}
+
 interface ExtendedPerformanceStats extends PerformanceStats {
   summary: PerformanceStats['summary'] & {
     passRate: number;
@@ -172,7 +179,7 @@ const VIEW_MODES = [
 
 const ResultsPerformance: React.FC = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -183,11 +190,26 @@ const ResultsPerformance: React.FC = () => {
   const [results, setResults] = useState<StudentResult[]>([]);
   const [filteredResults, setFilteredResults] = useState<StudentResult[]>([]);
   const [stats, setStats] = useState<ExtendedPerformanceStats | null>(null);
-  const [filters, setFilters] = useState<ResultsFilterParams & { viewMode?: 'class' | 'stream' | 'student'; selectedStudentId?: string }>({ viewMode: 'class' });
+
+  // ============================================
+  // FIX: filters in BOTH state (for UI) and a ref (for async access without stale closures)
+  // ============================================
+  type FiltersType = ResultsFilterParams & { viewMode?: 'class' | 'stream' | 'student'; selectedStudentId?: string };
+  const [filters, setFilters] = useState<FiltersType>({ viewMode: 'class' });
+  const filtersRef = useRef<FiltersType>({ viewMode: 'class' });
+
+  // Always update both state and ref together — use this instead of setFilters directly
+  const updateFilters = useCallback((updater: (prev: FiltersType) => FiltersType) => {
+    setFilters(prev => {
+      const next = updater(prev);
+      filtersRef.current = next;
+      return next;
+    });
+  }, []);
   
   const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [streams, setStreams] = useState<StreamOption[]>([]);
-  const [filteredStreams, setFilteredStreams] = useState<StreamOption[]>([]);
+  const [streams, setStreams] = useState<StreamOptionWithCount[]>([]);
+  const [filteredStreams, setFilteredStreams] = useState<StreamOptionWithCount[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
   const [terms, setTerms] = useState<TermOption[]>([]);
@@ -202,38 +224,222 @@ const ResultsPerformance: React.FC = () => {
   const [comparisonMode, setComparisonMode] = useState<'stream' | 'subject' | 'student'>('stream');
   
   const initialized = useRef(false);
+  // FIX: tracks when initialization is fully done so the results useEffect doesn't double-fire
+  const initDone = useRef(false);
   const chartRef = useRef<HTMLDivElement>(null);
 
-  // Initialize data
-  useEffect(() => {
-    if (user?.first_name && !initialized.current) {
-      initialized.current = true;
-      const loadInitialData = async () => {
-        await Promise.all([
-          fetchClasses(),
-          fetchAcademicYears(),
-          fetchCurricula(),
-          fetchGradingSystems(),
-          fetchSubjects()
-        ]);
+  const getClassesWithStreamCounts = useCallback((): ClassOptionWithStreams[] => {
+    return classes.map(cls => {
+      const classStreams = streams.filter(s => s.class_id === cls.id);
+      return {
+        ...cls,
+        streamCount: (cls as any).total_streams ?? classStreams.length
       };
-      
-      loadInitialData();
-    }
+    });
+  }, [classes, streams]);
+
+  // ============================================
+  // FIX: Sequential initialization — collect all IDs, then fire results directly.
+  // This avoids the stale closure problem where the results useEffect captured
+  // the initial empty filters before any async fetches completed.
+  // ============================================
+  useEffect(() => {
+    if (!user?.first_name || initialized.current) return;
+    initialized.current = true;
+
+    const initialize = async () => {
+      let classId: string | undefined;
+      let termId: string | undefined;
+      let gradingSystemId: string | undefined;
+      let curriculumId: string | undefined;
+
+      // Step 1: Classes
+      try {
+        const response = await api.get('/classes');
+        if (response.data.success) {
+          const classesData = response.data.data || [];
+          setClasses(classesData);
+          if (classesData.length > 0) {
+            classId = classesData[0].id;
+            updateFilters(prev => ({ ...prev, classId }));
+            fetchStreams(classId!);
+          }
+        }
+      } catch (error: any) {
+        if (error.response?.status !== 304) {
+          toast.error(error.response?.data?.error || 'Failed to load classes');
+        }
+      }
+
+      // Step 2: Academic years + terms (sequential — terms depend on year)
+      try {
+        const yearsResponse = await api.get('/academic/years');
+        if (yearsResponse.data.success) {
+          const yearsData = yearsResponse.data.data || [];
+          setAcademicYears(yearsData);
+
+          const currentYear = yearsData.find((y: AcademicYearOption) => y.is_current) || yearsData[0];
+          if (currentYear) {
+            setSelectedAcademicYear(currentYear.id);
+            updateFilters(prev => ({ ...prev, academicYearId: currentYear.id }));
+
+            // Fetch terms for this year immediately
+            try {
+              const termsResponse = await api.get(`/academic/years/${currentYear.id}/terms`);
+              if (termsResponse.data.success) {
+                let termsData = termsResponse.data.data || [];
+                if (termsResponse.data.data?.terms && Array.isArray(termsResponse.data.data.terms)) {
+                  termsData = termsResponse.data.data.terms;
+                } else if (Array.isArray(termsResponse.data.data)) {
+                  termsData = termsResponse.data.data;
+                }
+
+                const termsWithYear = termsData.map((term: TermOption) => ({
+                  ...term,
+                  name: term.name || term.term_name,
+                  academicYear: currentYear
+                }));
+                setTerms(termsWithYear);
+
+                const currentTerm = termsWithYear.find((t: TermOption) => t.is_current) || termsWithYear[0];
+                if (currentTerm) {
+                  termId = currentTerm.id;
+                  updateFilters(prev => ({ ...prev, termId }));
+                }
+              }
+            } catch (termError: any) {
+              if (termError.response?.status !== 304) {
+                toast.error(termError.response?.data?.error || 'Failed to load terms');
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        if (error.response?.status !== 304) {
+          toast.error(error.response?.data?.error || 'Failed to load academic years');
+        }
+      }
+
+      // Step 3: Grading systems
+      try {
+        const response = await api.get('/grading/systems', { params: { type: 'overall_points' } });
+        if (response.data.success) {
+          let systemsData = response.data.data;
+          if (!Array.isArray(systemsData)) {
+            if (systemsData?.raw && Array.isArray(systemsData.raw)) {
+              systemsData = systemsData.raw;
+            } else if (systemsData?.systems?.subject && Array.isArray(systemsData.systems.subject)) {
+              systemsData = systemsData.systems.subject;
+            } else if (systemsData?.data && Array.isArray(systemsData.data)) {
+              systemsData = systemsData.data;
+            } else {
+              systemsData = [];
+            }
+          }
+          if (!Array.isArray(systemsData)) systemsData = [];
+
+          console.log('Grading systems found:', systemsData.length, systemsData);
+          setGradingSystems(systemsData);
+
+          const defaultSystem = systemsData.find((sys: GradingSystem) => sys.is_default) || systemsData[0];
+          if (defaultSystem) {
+            gradingSystemId = defaultSystem.id;
+            updateFilters(prev => ({ ...prev, gradingSystemId }));
+          }
+        }
+      } catch (error: any) {
+        if (error.response?.status !== 304) {
+          toast.error(error.response?.data?.error || 'Failed to load grading systems');
+        }
+      }
+
+      // Step 4: Curricula (optional — non-blocking)
+      try {
+        const response = await api.get('/academic');
+        if (response.data.success) {
+          const curriculaData = response.data.data || [];
+          setCurricula(curriculaData);
+          if (curriculaData.length > 0) {
+            curriculumId = curriculaData[0].id;
+            updateFilters(prev => ({ ...prev, curriculumId }));
+          }
+        }
+      } catch (error: any) {
+        if (error.response?.status !== 304) {
+          toast.error(error.response?.data?.error || 'Failed to load curricula');
+        }
+      }
+
+      // Step 5: Subjects (fire and forget)
+      api.get('/subjects')
+        .then(r => { if (r.data.success) setSubjects(r.data.data || []); })
+        .catch(() => {});
+
+      // Step 6: Fire results with the IDs we collected above (NOT from stale state)
+      const finalClassId = classId || filtersRef.current.classId;
+      const finalTermId = termId || filtersRef.current.termId;
+      const finalGradingSystemId = gradingSystemId || filtersRef.current.gradingSystemId;
+      const finalCurriculumId = curriculumId || filtersRef.current.curriculumId;
+
+      console.log('Initialization complete — firing results with:', {
+        finalClassId, finalTermId, finalGradingSystemId
+      });
+
+      if (finalClassId && finalTermId && finalGradingSystemId) {
+        await Promise.all([
+          fetchResultsWithIds(finalClassId, finalTermId, finalGradingSystemId, undefined, finalCurriculumId),
+          fetchStatsWithIds(finalClassId, finalTermId, finalGradingSystemId, undefined)
+        ]);
+      } else {
+        console.warn('Missing IDs after init — results not fetched:', { finalClassId, finalTermId, finalGradingSystemId });
+        setLoading(false);
+      }
+
+      // Mark init as done so the manual-filter useEffect can now respond
+      initDone.current = true;
+    };
+
+    initialize();
   }, [user?.first_name]);
 
-  // Fetch streams when class changes
+  // ============================================
+  // FIX: Only react to manual filter changes AFTER initialization is complete.
+  // During init, fetchResultsWithIds is called directly above — skip double-firing.
+  // ============================================
+  useEffect(() => {
+    if (!initDone.current) return;
+
+    if (filters.classId && filters.termId && filters.gradingSystemId) {
+      fetchResultsWithIds(
+        filters.classId,
+        filters.termId,
+        filters.gradingSystemId,
+        filters.streamId,
+        filters.curriculumId
+      );
+      fetchStatsWithIds(
+        filters.classId,
+        filters.termId,
+        filters.gradingSystemId,
+        filters.streamId
+      );
+    }
+  }, [filters.classId, filters.termId, filters.gradingSystemId, filters.streamId]);
+
+  // Fetch streams when class changes (manual filter change)
   useEffect(() => {
     if (filters.classId) {
+      setStreams([]);
+      setFilteredStreams([]);
       fetchStreams(filters.classId);
     } else {
       setStreams([]);
       setFilteredStreams([]);
-      setFilters(prev => ({ ...prev, streamId: undefined }));
+      updateFilters(prev => ({ ...prev, streamId: undefined }));
     }
   }, [filters.classId]);
 
-  // Filter streams based on selection
+  // Filter streams based on selected class
   useEffect(() => {
     if (filters.classId && streams.length > 0) {
       const filtered = streams.filter(s => s.class_id === filters.classId);
@@ -243,28 +449,16 @@ const ResultsPerformance: React.FC = () => {
     }
   }, [filters.classId, streams]);
 
-  // Fetch terms when academic year changes
+  // Fetch terms when academic year changes manually (skip during init)
   useEffect(() => {
+    if (!initDone.current) return;
     if (selectedAcademicYear) {
       fetchTerms(selectedAcademicYear);
     } else {
       setTerms([]);
-      setFilters(prev => ({ ...prev, termId: undefined }));
+      updateFilters(prev => ({ ...prev, termId: undefined }));
     }
   }, [selectedAcademicYear]);
-
-  // Fetch results when filters change
-  useEffect(() => {
-    if (filters.classId && filters.termId && filters.gradingSystemId) {
-      fetchResults();
-      fetchPerformanceStats();
-      
-      // Also fetch stream-specific data if needed
-      if (filters.streamId) {
-        fetchStreamPerformance(filters.streamId);
-      }
-    }
-  }, [filters.classId, filters.termId, filters.gradingSystemId, filters.streamId]);
 
   // Filter results based on stream selection
   useEffect(() => {
@@ -279,246 +473,41 @@ const ResultsPerformance: React.FC = () => {
   }, [results, filters.streamId, streams]);
 
   // ============================================
-  // DATA FETCHING (Using api directly for non-results endpoints)
-  // ============================================
-  const getClassesWithStreamCounts = useCallback(() => {
-    return classes.map(cls => {
-      const classStreams = streams.filter(s => s.class_id === cls.id);
-      return {
-        ...cls,
-        streamCount: classStreams.length
-      };
-    });
-  }, [classes, streams]);
-
-  const fetchClasses = async () => {
-    try {
-      const response = await api.get('/classes');
-      
-      if (response.data.success) {
-        const classesData = response.data.data || [];
-        setClasses(classesData);
-        
-        // Auto-select first class if none selected
-        if (classesData.length > 0 && !filters.classId) {
-          setFilters(prev => ({
-            ...prev,
-            classId: classesData[0].id
-          }));
-        }
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch classes:', error);
-      if (error.response?.status === 304) {
-        console.log('Classes unchanged (304)');
-        return;
-      }
-      toast.error(error.response?.data?.error || 'Failed to load classes');
-    }
-  };
-
-  const fetchStreams = async (classId: string) => {
-    try {
-      const response = await api.get(`/classes/${classId}/streams`);
-      
-      if (response.data.success) {
-        const streamsData = response.data.data || [];
-        setStreams(streamsData);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch streams:', error);
-      if (error.response?.status === 304) {
-        console.log('Streams unchanged (304)');
-        return;
-      }
-      toast.error(error.response?.data?.error || 'Failed to load streams');
-    }
-  };
-
-  const fetchAcademicYears = async () => {
-    try {
-      const response = await api.get('/academic/years');
-      
-      if (response.data.success) {
-        const yearsData = response.data.data || [];
-        setAcademicYears(yearsData);
-        
-        const currentYear = yearsData.find((year: AcademicYearOption) => year.is_current);
-        if (currentYear) {
-          setSelectedAcademicYear(currentYear.id);
-          setFilters(prev => ({ ...prev, academicYearId: currentYear.id }));
-        } else if (yearsData.length > 0) {
-          setSelectedAcademicYear(yearsData[0].id);
-        }
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch academic years:', error);
-      if (error.response?.status === 304) {
-        console.log('Academic years unchanged (304)');
-        return;
-      }
-      toast.error(error.response?.data?.error || 'Failed to load academic years');
-    }
-  };
-
-  const fetchTerms = async (academicYearId: string) => {
-    try {
-      const response = await api.get(`/academic/years/${academicYearId}/terms`);
-      
-      if (response.data.success) {
-        let termsData = response.data.data || [];
-        
-        if (response.data.data?.terms && Array.isArray(response.data.data.terms)) {
-          termsData = response.data.data.terms;
-        } else if (Array.isArray(response.data.data)) {
-          termsData = response.data.data;
-        }
-        
-        const year = academicYears.find(y => y.id === academicYearId);
-        const termsWithYear = termsData.map((term: TermOption) => ({
-          ...term,
-          name: term.name || term.term_name,
-          academicYear: year
-        }));
-        
-        setTerms(termsWithYear);
-        
-        const currentTerm = termsWithYear.find((term: TermOption) => term.is_current);
-        if (currentTerm && !filters.termId) {
-          setFilters(prev => ({
-            ...prev,
-            termId: currentTerm.id
-          }));
-        }
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch terms:', error);
-      if (error.response?.status === 304) {
-        console.log('Terms unchanged (304)');
-        return;
-      }
-      toast.error(error.response?.data?.error || 'Failed to load terms');
-    }
-  };
-
-  const fetchCurricula = async () => {
-    try {
-      const response = await api.get('/academic');
-      
-      if (response.data.success) {
-        const curriculaData = response.data.data || [];
-        setCurricula(curriculaData);
-        
-        if (curriculaData.length > 0 && !filters.curriculumId) {
-          setFilters(prev => ({
-            ...prev,
-            curriculumId: curriculaData[0].id
-          }));
-        }
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch curricula:', error);
-      if (error.response?.status === 304) {
-        console.log('Curricula unchanged (304)');
-        return;
-      }
-      toast.error(error.response?.data?.error || 'Failed to load curricula');
-    }
-  };
-
-  const fetchGradingSystems = async () => {
-    try {
-      const response = await api.get('/grading/systems', {
-        params: { type: 'overall_points' }
-      });
-      
-      if (response.data.success) {
-        let systemsData = response.data.data;
-        
-        if (!Array.isArray(systemsData)) {
-          if (systemsData?.raw && Array.isArray(systemsData.raw)) {
-            systemsData = systemsData.raw;
-          } else if (systemsData?.systems?.subject && Array.isArray(systemsData.systems.subject)) {
-            systemsData = systemsData.systems.subject;
-          } else if (systemsData?.data && Array.isArray(systemsData.data)) {
-            systemsData = systemsData.data;
-          } else {
-            systemsData = [];
-          }
-        }
-        
-        if (!Array.isArray(systemsData)) {
-          systemsData = [];
-        }
-        
-        setGradingSystems(systemsData);
-        
-        const defaultSystem = systemsData.find((sys: GradingSystem) => sys.is_default);
-        if (defaultSystem && !filters.gradingSystemId) {
-          setFilters(prev => ({
-            ...prev,
-            gradingSystemId: defaultSystem.id
-          }));
-        }
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch grading systems:', error);
-      if (error.response?.status === 304) {
-        console.log('Grading systems unchanged (304)');
-        return;
-      }
-      toast.error(error.response?.data?.error || 'Failed to load grading systems');
-    }
-  };
-
-  const fetchSubjects = async () => {
-    try {
-      const response = await api.get('/subjects');
-      
-      if (response.data.success) {
-        const subjectsData = response.data.data || [];
-        setSubjects(subjectsData);
-      }
-    } catch (error: any) {
-      console.error('Failed to fetch subjects:', error);
-      if (error.response?.status === 304) {
-        console.log('Subjects unchanged (304)');
-        return;
-      }
-    }
-  };
-
-  // ============================================
-  // RESULTS API INTEGRATION
+  // CORE FETCH FUNCTIONS — accept IDs directly to bypass stale closures
   // ============================================
 
-  const fetchResults = async () => {
-    if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
-    
+  const fetchResultsWithIds = async (
+    classId: string,
+    termId: string,
+    gradingSystemId: string,
+    streamId?: string,
+    curriculumId?: string
+  ) => {
+    if (!classId || !termId || !gradingSystemId) return;
+
+    console.log('fetchResultsWithIds called with:', { classId, termId, gradingSystemId, streamId });
     setLoading(true);
     try {
       const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId,
-        ...(filters.curriculumId && { curriculumId: filters.curriculumId }),
-        ...(filters.streamId && { streamId: filters.streamId }),
+        classId,
+        termId,
+        gradingSystemId,
+        ...(curriculumId && { curriculumId }),
+        ...(streamId && { streamId }),
         includeSubjects: true,
         includeHistory: true
       };
 
       const response = await resultsAPI.getClassResultsDetailed(params);
-      
+      console.log('Results API response:', response.data);
+
       if (response.data.success) {
         const resultsData = response.data.results || [];
-        
-        // Enrich with trends
         const enrichedResults = resultsData.map((result: StudentResult) => ({
           ...result,
           trend: calculateTrend(result.previousRanks || []),
           subjects: result.subjects || []
         }));
-        
         setResults(enrichedResults);
         setFilteredResults(enrichedResults);
       } else {
@@ -532,36 +521,40 @@ const ResultsPerformance: React.FC = () => {
     }
   };
 
-  const fetchPerformanceStats = async () => {
-    if (!filters.classId || !filters.termId || !filters.gradingSystemId) return;
-    
+  const fetchStatsWithIds = async (
+    classId: string,
+    termId: string,
+    gradingSystemId: string,
+    streamId?: string
+  ) => {
+    if (!classId || !termId || !gradingSystemId) return;
+
     setStatsLoading(true);
     try {
       const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId,
-        ...(filters.streamId && { streamId: filters.streamId }),
+        classId,
+        termId,
+        gradingSystemId,
+        ...(streamId && { streamId }),
         includeStreamComparison: true,
         includeHeatmap: true
       };
 
       const response = await resultsAPI.getClassStatsEnhanced(params);
-      
+
       if (response.data.success) {
-        // Transform the data to match our extended interface
         const statsData = response.data;
         const passRate = calculatePassRateFromStats(statsData);
         const distinctionRate = calculateDistinctionRateFromStats(statsData);
         const creditRate = calculateCreditRateFromStats(statsData);
-        
+
         setStats({
           summary: {
             ...statsData.summary,
             passRate,
             distinctionRate,
             creditRate,
-            topStudent: statsData.summary.topStudent || null
+            topStudent: statsData.summary?.topStudent || null
           },
           data: statsData.data
         } as ExtendedPerformanceStats);
@@ -570,31 +563,91 @@ const ResultsPerformance: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Failed to fetch stats:', error);
-      if (error.response?.status === 304) {
-        console.log('Stats unchanged (304)');
-        return;
-      }
+      if (error.response?.status === 304) return;
       toast.error(error.response?.data?.error || 'Failed to fetch statistics');
     } finally {
       setStatsLoading(false);
     }
   };
 
-  const fetchStreamPerformance = async (streamId: string) => {
-    if (!filters.termId || !filters.gradingSystemId) return;
+  // ============================================
+  // DATA FETCHING — supporting fetchers
+  // ============================================
 
+  const fetchStreams = async (classId: string) => {
     try {
-      const params = {
-        streamId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId
-      };
+      const response = await api.get(`/classes/${classId}/streams`);
+      if (response.data.success) {
+        const rawStreams: any[] = response.data.data?.streams ?? [];
+        const normalizedStreams: StreamOptionWithCount[] = rawStreams.map((s: any) => ({
+          ...s,
+          class_id: classId,
+          studentCount: s.student_count,
+        }));
+        setStreams(prev => {
+          const existingIds = new Set(prev.map(s => s.id));
+          const newStreams = normalizedStreams.filter(s => !existingIds.has(s.id));
+          return [...prev, ...newStreams];
+        });
+      }
+    } catch (error: any) {
+      if (error.response?.status === 304) return;
+      toast.error(error.response?.data?.error || 'Failed to load streams');
+    }
+  };
 
+  const fetchTerms = async (academicYearId: string) => {
+    try {
+      const response = await api.get(`/academic/years/${academicYearId}/terms`);
+      if (response.data.success) {
+        let termsData = response.data.data || [];
+        if (response.data.data?.terms && Array.isArray(response.data.data.terms)) {
+          termsData = response.data.data.terms;
+        } else if (Array.isArray(response.data.data)) {
+          termsData = response.data.data;
+        }
+
+        const year = academicYears.find(y => y.id === academicYearId);
+        const termsWithYear = termsData.map((term: TermOption) => ({
+          ...term,
+          name: term.name || term.term_name,
+          academicYear: year
+        }));
+        setTerms(termsWithYear);
+
+        const currentTerm = termsWithYear.find((term: TermOption) => term.is_current) || termsWithYear[0];
+        if (currentTerm) {
+          updateFilters(prev => ({ ...prev, termId: currentTerm.id }));
+        }
+      }
+    } catch (error: any) {
+      if (error.response?.status === 304) return;
+      toast.error(error.response?.data?.error || 'Failed to load terms');
+    }
+  };
+
+  // ============================================
+  // RESULTS API INTEGRATION
+  // ============================================
+
+  // Legacy wrappers — read from filtersRef to avoid stale closures
+  const fetchResults = async () => {
+    const f = filtersRef.current;
+    await fetchResultsWithIds(f.classId!, f.termId!, f.gradingSystemId!, f.streamId, f.curriculumId);
+  };
+
+  const fetchPerformanceStats = async () => {
+    const f = filtersRef.current;
+    await fetchStatsWithIds(f.classId!, f.termId!, f.gradingSystemId!, f.streamId);
+  };
+
+  const fetchStreamPerformance = async (streamId: string) => {
+    const f = filtersRef.current;
+    if (!f.termId || !f.gradingSystemId) return;
+    try {
+      const params = { streamId, termId: f.termId, gradingSystemId: f.gradingSystemId };
       const response = await resultsAPI.getStreamPerformance(params);
-      
       if (response.data.success && stats) {
-        // Merge stream data into stats (if needed)
-        // This depends on your data structure
         console.log('Stream performance data:', response.data.data);
       }
     } catch (error: any) {
@@ -603,7 +656,8 @@ const ResultsPerformance: React.FC = () => {
   };
 
   const fetchStudentDetails = async (studentId: string) => {
-    if (!filters.termId || !filters.gradingSystemId) return;
+    const f = filtersRef.current;
+    if (!f.termId || !f.gradingSystemId) return;
 
     if (studentDetails.has(studentId)) {
       setSelectedStudent(studentDetails.get(studentId) || null);
@@ -613,15 +667,13 @@ const ResultsPerformance: React.FC = () => {
     try {
       const params = {
         studentId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId,
+        termId: f.termId,
+        gradingSystemId: f.gradingSystemId,
         includeSubjects: true,
         includeHistory: true,
         includeRecommendations: true
       };
-
       const response = await resultsAPI.getStudentDetailed(params);
-      
       if (response.data.success) {
         const studentData = response.data.data;
         studentDetails.set(studentId, studentData);
@@ -640,14 +692,11 @@ const ResultsPerformance: React.FC = () => {
 
   const calculateTrend = (history: any[]): 'up' | 'down' | 'stable' => {
     if (!history || history.length < 2) return 'stable';
-    
-    const sorted = [...history].sort((a, b) => 
+    const sorted = [...history].sort((a, b) =>
       new Date(a.termId).getTime() - new Date(b.termId).getTime()
     );
-    
     const first = sorted[0].meanPoints;
     const last = sorted[sorted.length - 1].meanPoints;
-    
     if (last > first * 1.05) return 'up';
     if (last < first * 0.95) return 'down';
     return 'stable';
@@ -667,41 +716,34 @@ const ResultsPerformance: React.FC = () => {
     return "E";
   };
 
-  const getMeanPercentage = (meanPoints: number) => {
-    return Math.round((meanPoints / 12) * 100);
-  };
+  const getMeanPercentage = (meanPoints: number) => Math.round((meanPoints / 12) * 100);
 
   const calculatePassRateFromStats = (statsData: any) => {
     if (!statsData?.data?.gradeDistribution?.length) return 0;
     const passingGrades = ['A', 'A-', 'B+', 'B', 'B-', 'C+'];
-    const totalGrades = statsData.data.gradeDistribution.reduce((sum: number, g: any) => sum + g.count, 0);
-    const passingGradesCount = statsData.data.gradeDistribution
+    const total = statsData.data.gradeDistribution.reduce((s: number, g: any) => s + g.count, 0);
+    const passing = statsData.data.gradeDistribution
       .filter((g: any) => passingGrades.includes(g.grade))
-      .reduce((sum: number, g: any) => sum + g.count, 0);
-    
-    return totalGrades > 0 ? Math.round((passingGradesCount / totalGrades) * 100) : 0;
+      .reduce((s: number, g: any) => s + g.count, 0);
+    return total > 0 ? Math.round((passing / total) * 100) : 0;
   };
 
   const calculateDistinctionRateFromStats = (statsData: any) => {
     if (!statsData?.data?.gradeDistribution?.length) return 0;
-    const distinctionGrades = ['A', 'A-'];
-    const totalGrades = statsData.data.gradeDistribution.reduce((sum: number, g: any) => sum + g.count, 0);
-    const distinctionCount = statsData.data.gradeDistribution
-      .filter((g: any) => distinctionGrades.includes(g.grade))
-      .reduce((sum: number, g: any) => sum + g.count, 0);
-    
-    return totalGrades > 0 ? Math.round((distinctionCount / totalGrades) * 100) : 0;
+    const total = statsData.data.gradeDistribution.reduce((s: number, g: any) => s + g.count, 0);
+    const distinctions = statsData.data.gradeDistribution
+      .filter((g: any) => ['A', 'A-'].includes(g.grade))
+      .reduce((s: number, g: any) => s + g.count, 0);
+    return total > 0 ? Math.round((distinctions / total) * 100) : 0;
   };
 
   const calculateCreditRateFromStats = (statsData: any) => {
     if (!statsData?.data?.gradeDistribution?.length) return 0;
-    const creditGrades = ['B+', 'B', 'B-'];
-    const totalGrades = statsData.data.gradeDistribution.reduce((sum: number, g: any) => sum + g.count, 0);
-    const creditCount = statsData.data.gradeDistribution
-      .filter((g: any) => creditGrades.includes(g.grade))
-      .reduce((sum: number, g: any) => sum + g.count, 0);
-    
-    return totalGrades > 0 ? Math.round((creditCount / totalGrades) * 100) : 0;
+    const total = statsData.data.gradeDistribution.reduce((s: number, g: any) => s + g.count, 0);
+    const credits = statsData.data.gradeDistribution
+      .filter((g: any) => ['B+', 'B', 'B-'].includes(g.grade))
+      .reduce((s: number, g: any) => s + g.count, 0);
+    return total > 0 ? Math.round((credits / total) * 100) : 0;
   };
 
   const getTopPerformerScore = (statsData: ExtendedPerformanceStats) => {
@@ -710,35 +752,31 @@ const ResultsPerformance: React.FC = () => {
   };
 
   // ============================================
-  // EXPORT FUNCTIONS (Using resultsAPI)
+  // EXPORT FUNCTIONS
   // ============================================
 
   const handleExportExcel = async (type: 'broadsheet' | 'stream' | 'individual' = 'broadsheet') => {
-    if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+    const f = filtersRef.current;
+    if (!f.classId || !f.termId || !f.gradingSystemId) {
       toast.error('Please select class, term, and grading system first');
       return;
     }
-
     setExportLoading(true);
     try {
       const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId,
-        ...(filters.streamId && { streamId: filters.streamId }),
+        classId: f.classId,
+        termId: f.termId,
+        gradingSystemId: f.gradingSystemId,
+        ...(f.streamId && { streamId: f.streamId }),
         type
       };
-
       const response = await resultsAPI.exportResultsExcel(params);
-      
-      let filename = resultsAPI.generateFilename(type, {
-        classId: filters.classId,
-        termId: filters.termId,
-        streamId: filters.streamId
+      const filename = resultsAPI.generateFilename(type, {
+        classId: f.classId,
+        termId: f.termId,
+        streamId: f.streamId
       });
-      
       resultsAPI.downloadBlob(response.data, filename);
-      
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded`);
     } catch (error: any) {
       console.error('Export failed:', error);
@@ -750,41 +788,36 @@ const ResultsPerformance: React.FC = () => {
   };
 
   const handleExportPDF = async (type: 'class' | 'stream' | 'student') => {
-    if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+    const f = filtersRef.current;
+    if (!f.classId || !f.termId || !f.gradingSystemId) {
       toast.error('Please select class, term, and grading system first');
       return;
     }
-
     setExportLoading(true);
     try {
       const params: any = {
-        classId: filters.classId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId,
+        classId: f.classId,
+        termId: f.termId,
+        gradingSystemId: f.gradingSystemId,
         type
       };
-
-      if (type === 'student' && filters.selectedStudentId) {
-        params.studentId = filters.selectedStudentId;
-      } else if (type === 'stream' && filters.streamId) {
-        params.streamId = filters.streamId;
+      if (type === 'student' && f.selectedStudentId) {
+        params.studentId = f.selectedStudentId;
+      } else if (type === 'stream' && f.streamId) {
+        params.streamId = f.streamId;
       }
-
       const response = await resultsAPI.exportClassPDF(params);
-      
       let filename = '';
-      if (type === 'student' && filters.selectedStudentId) {
-        const student = results.find(r => r.studentId === filters.selectedStudentId);
+      if (type === 'student' && f.selectedStudentId) {
+        const student = results.find(r => r.studentId === f.selectedStudentId);
         filename = resultsAPI.generateFilename('student', {}, student?.studentName);
       } else {
         filename = resultsAPI.generateFilename('broadsheet', {
-          classId: filters.classId,
-          termId: filters.termId
+          classId: f.classId,
+          termId: f.termId
         }).replace('.xlsx', '.pdf');
       }
-      
       resultsAPI.downloadBlob(response.data, filename);
-      
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded`);
     } catch (error: any) {
       console.error('Export failed:', error);
@@ -796,28 +829,23 @@ const ResultsPerformance: React.FC = () => {
   };
 
   const handlePrint = async () => {
-    if (!filters.classId || !filters.termId || !filters.gradingSystemId) {
+    const f = filtersRef.current;
+    if (!f.classId || !f.termId || !f.gradingSystemId) {
       toast.error('Please select class, term, and grading system first');
       return;
     }
-
     try {
       const params = {
-        classId: filters.classId,
-        termId: filters.termId,
-        gradingSystemId: filters.gradingSystemId,
-        ...(filters.streamId && { streamId: filters.streamId })
+        classId: f.classId,
+        termId: f.termId,
+        gradingSystemId: f.gradingSystemId,
+        ...(f.streamId && { streamId: f.streamId })
       };
-
       const response = await resultsAPI.getPrintView(params);
-
       const url = window.URL.createObjectURL(response.data);
       const printWindow = window.open(url);
-      
       if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
+        printWindow.onload = () => { printWindow.print(); };
       }
     } catch (error: any) {
       console.error('Print failed:', error);
@@ -831,9 +859,7 @@ const ResultsPerformance: React.FC = () => {
 
   const enhancedStats = useMemo(() => {
     if (!stats || !filteredResults.length) return null;
-
     const topStudent = filteredResults.length > 0 ? filteredResults[0] : null;
-
     return {
       ...stats,
       summary: {
@@ -851,198 +877,200 @@ const ResultsPerformance: React.FC = () => {
   // RENDER FUNCTIONS
   // ============================================
 
-  const renderFilterDropdown = () => (
-    <div className="absolute top-full right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 min-w-[400px] z-50">
-      <div className="p-6 space-y-4">
-        <h3 className="text-lg font-black text-slate-800">Filter Results</h3>
-        
-        {/* View Mode Toggle */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <Eye size={14} className="inline mr-2" />
-            View Mode
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {VIEW_MODES.map(mode => (
-              <button
-                key={mode.value}
-                onClick={() => {
-                  setSelectedViewMode(mode.value as any);
-                  setFilters(prev => ({ ...prev, viewMode: mode.value as any }));
-                }}
-                className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-                  selectedViewMode === mode.value
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                }`}
+  const renderFilterDropdown = () => {
+    const classesWithStreamCounts = getClassesWithStreamCounts();
+    return (
+      <div className="absolute top-full right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 min-w-[400px] z-50">
+        <div className="p-6 space-y-4">
+          <h3 className="text-lg font-black text-slate-800">Filter Results</h3>
+
+          {/* View Mode Toggle */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <Eye size={14} className="inline mr-2" />
+              View Mode
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {VIEW_MODES.map(mode => (
+                <button
+                  key={mode.value}
+                  onClick={() => {
+                    setSelectedViewMode(mode.value as any);
+                    updateFilters(prev => ({ ...prev, viewMode: mode.value as any }));
+                  }}
+                  className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                    selectedViewMode === mode.value
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {mode.icon}
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Class Selection */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <Users size={14} className="inline mr-2" />
+              Class
+            </label>
+            <select
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.classId || ''}
+              onChange={(e) => updateFilters(prev => ({ ...prev, classId: e.target.value, streamId: undefined }))}
+            >
+              <option value="">Select Class</option>
+              {classesWithStreamCounts.map(cls => (
+                <option key={cls.id} value={cls.id}>
+                  {cls.class_name} ({cls.streamCount} {cls.streamCount === 1 ? 'stream' : 'streams'})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Stream Selection */}
+          {filters.classId && filteredStreams.length > 0 && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                <Layers size={14} className="inline mr-2" />
+                Stream (Optional)
+              </label>
+              <select
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={filters.streamId || ''}
+                onChange={(e) => updateFilters(prev => ({ ...prev, streamId: e.target.value || undefined }))}
               >
-                {mode.icon}
-                {mode.label}
-              </button>
-            ))}
-          </div>
-        </div>
+                <option value="">All Streams</option>
+                {filteredStreams.map(stream => (
+                  <option key={stream.id} value={stream.id}>
+                    {stream.name} ({stream.studentCount ?? 0} {stream.studentCount === 1 ? 'student' : 'students'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        {/* Class Selection */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <Users size={14} className="inline mr-2" />
-            Class
-          </label>
-          <select 
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={filters.classId || ''}
-            onChange={(e) => setFilters({...filters, classId: e.target.value, streamId: undefined})}
-          >
-            <option value="">Select Class</option>
-            {classes.map(cls => (
-              <option key={cls.id} value={cls.id}>
-                {cls.class_name} ({cls.streamCount || 0} streams)
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Stream Selection (appears when class selected) */}
-        {filters.classId && filteredStreams.length > 0 && (
+          {/* Academic Year */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              <Layers size={14} className="inline mr-2" />
-              Stream (Optional)
+              <Calendar size={14} className="inline mr-2" />
+              Academic Year
             </label>
-            <select 
+            <select
               className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.streamId || ''}
-              onChange={(e) => setFilters({...filters, streamId: e.target.value || undefined})}
+              value={selectedAcademicYear}
+              onChange={(e) => {
+                setSelectedAcademicYear(e.target.value);
+                updateFilters(prev => ({ ...prev, termId: undefined }));
+              }}
             >
-              <option value="">All Streams</option>
-              {filteredStreams.map(stream => (
-                <option key={stream.id} value={stream.id}>
-                  {stream.name} ({stream.studentCount || 0} students)
+              <option value="">Select Academic Year</option>
+              {academicYears.map(year => (
+                <option key={year.id} value={year.id}>
+                  {year.year_name} {year.is_current && '(Current)'}
                 </option>
               ))}
             </select>
           </div>
-        )}
 
-        {/* Academic Year */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <Calendar size={14} className="inline mr-2" />
-            Academic Year
-          </label>
-          <select 
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={selectedAcademicYear}
-            onChange={(e) => {
-              setSelectedAcademicYear(e.target.value);
-              setFilters(prev => ({ ...prev, termId: undefined }));
-            }}
-          >
-            <option value="">Select Academic Year</option>
-            {academicYears.map(year => (
-              <option key={year.id} value={year.id}>
-                {year.year_name} {year.is_current && '(Current)'}
-              </option>
-            ))}
-          </select>
-        </div>
+          {/* Term */}
+          {selectedAcademicYear && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                <Clock size={14} className="inline mr-2" />
+                Term
+              </label>
+              <select
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={filters.termId || ''}
+                onChange={(e) => updateFilters(prev => ({ ...prev, termId: e.target.value }))}
+                disabled={!selectedAcademicYear || terms.length === 0}
+              >
+                <option value="">{terms.length === 0 ? 'No terms available' : 'Select Term'}</option>
+                {terms.map(term => (
+                  <option key={term.id} value={term.id}>
+                    {term.name} {term.is_current && '(Current)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        {/* Term */}
-        {selectedAcademicYear && (
+          {/* Curriculum */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              <Clock size={14} className="inline mr-2" />
-              Term
+              <BookOpen size={14} className="inline mr-2" />
+              Curriculum
             </label>
-            <select 
+            <select
               className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.termId || ''}
-              onChange={(e) => setFilters({...filters, termId: e.target.value})}
-              disabled={!selectedAcademicYear || terms.length === 0}
+              value={filters.curriculumId || ''}
+              onChange={(e) => updateFilters(prev => ({ ...prev, curriculumId: e.target.value }))}
             >
-              <option value="">{terms.length === 0 ? 'No terms available' : 'Select Term'}</option>
-              {terms.map(term => (
-                <option key={term.id} value={term.id}>
-                  {term.name} {term.is_current && '(Current)'}
+              <option value="">All Curricula</option>
+              {curricula.map(curr => (
+                <option key={curr.id} value={curr.id}>
+                  {curr.name} ({curr.code})
                 </option>
               ))}
             </select>
           </div>
-        )}
 
-        {/* Curriculum */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <BookOpen size={14} className="inline mr-2" />
-            Curriculum
-          </label>
-          <select 
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={filters.curriculumId || ''}
-            onChange={(e) => setFilters({...filters, curriculumId: e.target.value})}
-          >
-            <option value="">All Curricula</option>
-            {curricula.map(curr => (
-              <option key={curr.id} value={curr.id}>
-                {curr.name} ({curr.code})
-              </option>
-            ))}
-          </select>
-        </div>
+          {/* Grading System */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <BarChart2 size={14} className="inline mr-2" />
+              Grading System
+            </label>
+            <select
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.gradingSystemId || ''}
+              onChange={(e) => updateFilters(prev => ({ ...prev, gradingSystemId: e.target.value }))}
+            >
+              <option value="">Default System</option>
+              {gradingSystems.map(sys => (
+                <option key={sys.id} value={sys.id}>
+                  {sys.name} {sys.is_default && '(Default)'}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Grading System */}
-        <div>
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-            <BarChart2 size={14} className="inline mr-2" />
-            Grading System
-          </label>
-          <select 
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={filters.gradingSystemId || ''}
-            onChange={(e) => setFilters({...filters, gradingSystemId: e.target.value})}
-          >
-            <option value="">Default System</option>
-            {gradingSystems.map(sys => (
-              <option key={sys.id} value={sys.id}>
-                {sys.name} {sys.is_default && '(Default)'}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-4">
-          <button 
-            className="flex-1 px-4 py-2 text-sm font-bold text-slate-600 border border-slate-300 rounded-xl hover:bg-slate-50"
-            onClick={() => {
-              setFilters({ viewMode: 'class' });
-              setSelectedAcademicYear("");
-              setShowFilters(false);
-            }}
-          >
-            Clear All
-          </button>
-          <button 
-            className="flex-1 px-4 py-2 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800"
-            onClick={() => setShowFilters(false)}
-          >
-            Apply Filters
-          </button>
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-4">
+            <button
+              className="flex-1 px-4 py-2 text-sm font-bold text-slate-600 border border-slate-300 rounded-xl hover:bg-slate-50"
+              onClick={() => {
+                const reset: FiltersType = { viewMode: 'class' };
+                setFilters(reset);
+                filtersRef.current = reset;
+                setSelectedAcademicYear("");
+                setShowFilters(false);
+              }}
+            >
+              Clear All
+            </button>
+            <button
+              className="flex-1 px-4 py-2 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800"
+              onClick={() => setShowFilters(false)}
+            >
+              Apply Filters
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderExportModal = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-black text-slate-800">Export Options</h3>
-          <button 
-            onClick={() => setShowExportModal(false)}
-            className="p-2 hover:bg-slate-100 rounded-xl"
-          >
+          <button onClick={() => setShowExportModal(false)} className="p-2 hover:bg-slate-100 rounded-xl">
             <XCircle size={20} />
           </button>
         </div>
@@ -1051,11 +1079,8 @@ const ResultsPerformance: React.FC = () => {
           {/* Excel Exports */}
           <div className="space-y-2">
             <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Excel Reports</h4>
-            <button
-              onClick={() => handleExportExcel('broadsheet')}
-              disabled={exportLoading}
-              className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50"
-            >
+            <button onClick={() => handleExportExcel('broadsheet')} disabled={exportLoading}
+              className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50">
               <div className="flex items-center gap-3">
                 <FileSpreadsheet size={20} className="text-emerald-600" />
                 <div className="text-left">
@@ -1067,11 +1092,8 @@ const ResultsPerformance: React.FC = () => {
             </button>
 
             {filters.streamId && (
-              <button
-                onClick={() => handleExportExcel('stream')}
-                disabled={exportLoading}
-                className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50"
-              >
+              <button onClick={() => handleExportExcel('stream')} disabled={exportLoading}
+                className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50">
                 <div className="flex items-center gap-3">
                   <FileSpreadsheet size={20} className="text-blue-600" />
                   <div className="text-left">
@@ -1083,11 +1105,8 @@ const ResultsPerformance: React.FC = () => {
               </button>
             )}
 
-            <button
-              onClick={() => handleExportExcel('individual')}
-              disabled={exportLoading}
-              className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50"
-            >
+            <button onClick={() => handleExportExcel('individual')} disabled={exportLoading}
+              className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50">
               <div className="flex items-center gap-3">
                 <FileSpreadsheet size={20} className="text-purple-600" />
                 <div className="text-left">
@@ -1102,11 +1121,8 @@ const ResultsPerformance: React.FC = () => {
           {/* PDF Exports */}
           <div className="space-y-2">
             <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">PDF Reports</h4>
-            <button
-              onClick={() => handleExportPDF('class')}
-              disabled={exportLoading}
-              className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50"
-            >
+            <button onClick={() => handleExportPDF('class')} disabled={exportLoading}
+              className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50">
               <div className="flex items-center gap-3">
                 <FileText size={20} className="text-rose-600" />
                 <div className="text-left">
@@ -1118,11 +1134,8 @@ const ResultsPerformance: React.FC = () => {
             </button>
 
             {filters.streamId && (
-              <button
-                onClick={() => handleExportPDF('stream')}
-                disabled={exportLoading}
-                className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50"
-              >
+              <button onClick={() => handleExportPDF('stream')} disabled={exportLoading}
+                className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50">
                 <div className="flex items-center gap-3">
                   <FileText size={20} className="text-amber-600" />
                   <div className="text-left">
@@ -1135,11 +1148,8 @@ const ResultsPerformance: React.FC = () => {
             )}
 
             {filters.selectedStudentId && (
-              <button
-                onClick={() => handleExportPDF('student')}
-                disabled={exportLoading}
-                className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50"
-              >
+              <button onClick={() => handleExportPDF('student')} disabled={exportLoading}
+                className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50">
                 <div className="flex items-center gap-3">
                   <FileText size={20} className="text-indigo-600" />
                   <div className="text-left">
@@ -1153,11 +1163,8 @@ const ResultsPerformance: React.FC = () => {
           </div>
 
           {/* Print Option */}
-          <button
-            onClick={handlePrint}
-            disabled={exportLoading}
-            className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50 mt-4"
-          >
+          <button onClick={handlePrint} disabled={exportLoading}
+            className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 disabled:opacity-50 mt-4">
             <div className="flex items-center gap-3">
               <Printer size={20} className="text-slate-600" />
               <div className="text-left">
@@ -1185,62 +1192,49 @@ const ResultsPerformance: React.FC = () => {
       return (
         <div className="col-span-6 p-8 bg-white/50 border border-slate-200 rounded-3xl text-center">
           <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-          <p className="text-slate-500 font-medium">Select filters to view performance statistics</p>
+          <p className="text-slate-500 font-medium">
+            {loading ? 'Loading results...' : 'Select filters to view performance statistics'}
+          </p>
         </div>
       );
     }
 
     const statCards = [
-      { 
-        label: "Class Average", 
-        value: `${enhancedStats.summary?.classMeanPoints || '0.00'} pts`, 
+      {
+        label: "Class Average",
+        value: `${enhancedStats.summary?.classMeanPoints || '0.00'} pts`,
         subLabel: `${enhancedStats.summary?.classMeanGrade || ''} Grade`,
-        icon: <Target />, 
-        color: "from-blue-600 to-indigo-700",
-        trend: "+0.3",
-        trendUp: true
+        icon: <Target />, color: "from-blue-600 to-indigo-700", trend: "+0.3", trendUp: true
       },
-      { 
-        label: "Pass Rate", 
-        value: `${enhancedStats.summary?.passRate || 0}%`, 
+      {
+        label: "Pass Rate",
+        value: `${enhancedStats.summary?.passRate || 0}%`,
         subLabel: `${enhancedStats.summary?.creditRate || 0}% Credit`,
-        icon: <TrendingUp />, 
-        color: "from-emerald-500 to-teal-600",
-        trend: "+5%",
-        trendUp: true
+        icon: <TrendingUp />, color: "from-emerald-500 to-teal-600", trend: "+5%", trendUp: true
       },
-      { 
-        label: "Distinctions", 
-        value: `${enhancedStats.summary?.distinctionRate || 0}%`, 
+      {
+        label: "Distinctions",
+        value: `${enhancedStats.summary?.distinctionRate || 0}%`,
         subLabel: "A & A- Grades",
-        icon: <Award />, 
-        color: "from-purple-600 to-fuchsia-600",
-        trend: "+2%",
-        trendUp: true
+        icon: <Award />, color: "from-purple-600 to-fuchsia-600", trend: "+2%", trendUp: true
       },
-      { 
-        label: "Total Students", 
-        value: enhancedStats.summary?.totalStudents || 0, 
+      {
+        label: "Total Students",
+        value: enhancedStats.summary?.totalStudents || 0,
         subLabel: `${filteredStreams.length} Streams`,
-        icon: <Users />, 
-        color: "from-amber-400 to-orange-500",
-        trend: ""
+        icon: <Users />, color: "from-amber-400 to-orange-500", trend: ""
       },
-      { 
-        label: "Top Performer", 
-        value: enhancedStats.summary?.topStudent?.name?.split(' ')[0] || 'N/A', 
+      {
+        label: "Top Performer",
+        value: enhancedStats.summary?.topStudent?.name?.split(' ')[0] || 'N/A',
         subLabel: `${enhancedStats.summary?.topStudent?.points || 0} pts • ${enhancedStats.summary?.topStudent?.stream || ''}`,
-        icon: <Star />, 
-        color: "from-pink-500 to-rose-600",
-        trend: ""
+        icon: <Star />, color: "from-pink-500 to-rose-600", trend: ""
       },
-      { 
-        label: "Grading System", 
-        value: enhancedStats.summary?.gradingSystemName || 'Standard', 
+      {
+        label: "Grading System",
+        value: enhancedStats.summary?.gradingSystemName || 'Standard',
         subLabel: `${enhancedStats.data?.gradeDistribution?.length || 0} Grade Levels`,
-        icon: <BarChart2 />, 
-        color: "from-slate-700 to-slate-900",
-        trend: ""
+        icon: <BarChart2 />, color: "from-slate-700 to-slate-900", trend: ""
       }
     ];
 
@@ -1277,37 +1271,26 @@ const ResultsPerformance: React.FC = () => {
             </h3>
             <p className="text-sm text-slate-500 mt-1">Performance across streams</p>
           </div>
-          <button 
+          <button
             onClick={() => setFullscreenChart(fullscreenChart === 'stream' ? null : 'stream')}
             className="p-2 hover:bg-slate-100 rounded-xl"
           >
             {fullscreenChart === 'stream' ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
         </div>
-        
+
         <div className={`p-6 ${fullscreenChart === 'stream' ? 'h-[600px]' : ''}`}>
           <ResponsiveContainer width="100%" height={fullscreenChart === 'stream' ? 550 : 350}>
-            <BarChart
-              data={stats.data.streamComparison}
-              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            >
+            <BarChart data={stats.data.streamComparison} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="streamName" stroke="#64748b" />
               <YAxis stroke="#64748b" domain={[0, 12]} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'white',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'
-                }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
               <Legend />
               <Bar dataKey="meanPoints" fill="#6366f1" name="Mean Points" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
 
-          {/* Stream Details Table */}
           <div className="mt-6 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1336,22 +1319,16 @@ const ResultsPerformance: React.FC = () => {
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                         stream.meanGrade === 'A' ? 'bg-emerald-100 text-emerald-700' :
                         stream.meanGrade === 'B' ? 'bg-blue-100 text-blue-700' :
-                        stream.meanGrade === 'C' ? 'bg-amber-100 text-amber-700' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        {stream.meanGrade}
-                      </span>
+                        stream.meanGrade === 'C' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                      }`}>{stream.meanGrade}</span>
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-emerald-600">{stream.passRate}%</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                         stream.rank === 1 ? 'bg-emerald-100 text-emerald-700' :
                         stream.rank === 2 ? 'bg-blue-100 text-blue-700' :
-                        stream.rank === 3 ? 'bg-amber-100 text-amber-700' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        #{stream.rank}
-                      </span>
+                        stream.rank === 3 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                      }`}>#{stream.rank}</span>
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-slate-600">{stream.topStudent}</td>
                   </tr>
@@ -1378,47 +1355,28 @@ const ResultsPerformance: React.FC = () => {
             <p className="text-sm text-slate-500 mt-1">Heatmap of subject performance by stream</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setChartType(chartType === 'bar' ? 'radar' : 'bar')}
-              className="p-2 hover:bg-slate-100 rounded-xl"
-            >
+            <button onClick={() => setChartType(chartType === 'bar' ? 'radar' : 'bar')} className="p-2 hover:bg-slate-100 rounded-xl">
               {chartType === 'bar' ? <Radar size={18} /> : <BarChart2 size={18} />}
             </button>
-            <button 
-              onClick={() => setFullscreenChart(fullscreenChart === 'subject' ? null : 'subject')}
-              className="p-2 hover:bg-slate-100 rounded-xl"
-            >
+            <button onClick={() => setFullscreenChart(fullscreenChart === 'subject' ? null : 'subject')} className="p-2 hover:bg-slate-100 rounded-xl">
               {fullscreenChart === 'subject' ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
           </div>
         </div>
-        
+
         <div className={`p-6 ${fullscreenChart === 'subject' ? 'h-[600px]' : ''}`}>
           {chartType === 'bar' ? (
             <ResponsiveContainer width="100%" height={fullscreenChart === 'subject' ? 550 : 350}>
-              <BarChart
-                data={stats.data.subjectHeatmap}
-                margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-              >
+              <BarChart data={stats.data.subjectHeatmap} margin={{ top: 20, right: 30, left: 20, bottom: 70 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="subject" angle={-45} textAnchor="end" height={70} stroke="#64748b" />
                 <YAxis stroke="#64748b" domain={[0, 12]} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0'
-                  }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }} />
                 <Legend />
-                {stats.data.subjectHeatmap[0]?.streams.map((_, idx) => (
-                  <Bar
-                    key={idx}
-                    dataKey={`streams[${idx}].meanScore`}
-                    name={stats.data.subjectHeatmap[0].streams[idx]?.streamName || `Stream ${idx + 1}`}
-                    fill={COLORS.streams[idx % COLORS.streams.length]}
-                    radius={[4, 4, 0, 0]}
-                  />
+                {(stats.data.subjectHeatmap?.[0]?.streams ?? []).map((_, idx) => (
+                  <Bar key={idx} dataKey={`streams[${idx}].meanScore`}
+                    name={stats.data.subjectHeatmap?.[0]?.streams[idx]?.streamName ?? `Stream ${idx + 1}`}
+                    fill={COLORS.streams[idx % COLORS.streams.length]} radius={[4, 4, 0, 0]} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -1428,15 +1386,12 @@ const ResultsPerformance: React.FC = () => {
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="subject" stroke="#64748b" />
                 <PolarRadiusAxis stroke="#64748b" domain={[0, 12]} />
-                {stats.data.subjectHeatmap[0]?.streams.map((_, idx) => (
-                  <ReRadar
-                    key={idx}
-                    name={stats.data.subjectHeatmap[0].streams[idx]?.streamName || `Stream ${idx + 1}`}
+                {(stats.data.subjectHeatmap?.[0]?.streams ?? []).map((_, idx) => (
+                  <ReRadar key={idx}
+                    name={stats.data.subjectHeatmap?.[0]?.streams[idx]?.streamName ?? `Stream ${idx + 1}`}
                     dataKey={`streams[${idx}].meanScore`}
                     stroke={COLORS.streams[idx % COLORS.streams.length]}
-                    fill={COLORS.streams[idx % COLORS.streams.length]}
-                    fillOpacity={0.2}
-                  />
+                    fill={COLORS.streams[idx % COLORS.streams.length]} fillOpacity={0.2} />
                 ))}
                 <Legend />
                 <Tooltip />
@@ -1461,36 +1416,20 @@ const ResultsPerformance: React.FC = () => {
             </h3>
             <p className="text-sm text-slate-500 mt-1">Progress across terms</p>
           </div>
-          <button 
-            onClick={() => setFullscreenChart(fullscreenChart === 'trend' ? null : 'trend')}
-            className="p-2 hover:bg-slate-100 rounded-xl"
-          >
+          <button onClick={() => setFullscreenChart(fullscreenChart === 'trend' ? null : 'trend')} className="p-2 hover:bg-slate-100 rounded-xl">
             {fullscreenChart === 'trend' ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
         </div>
-        
+
         <div className={`p-6 ${fullscreenChart === 'trend' ? 'h-[500px]' : ''}`}>
           <ResponsiveContainer width="100%" height={fullscreenChart === 'trend' ? 450 : 300}>
             <ComposedChart data={stats.data.performanceTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="term" stroke="#64748b" />
               <YAxis stroke="#64748b" domain={[0, 12]} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'white',
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0'
-                }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }} />
               <Legend />
-              <Area
-                type="monotone"
-                dataKey="classMean"
-                fill="#6366f1"
-                stroke="#4f46e5"
-                fillOpacity={0.1}
-                name="Class Average"
-              />
+              <Area type="monotone" dataKey="classMean" fill="#6366f1" stroke="#4f46e5" fillOpacity={0.1} name="Class Average" />
               {stats.data.performanceTrend[0]?.streamAMean !== undefined && (
                 <Line type="monotone" dataKey="streamAMean" stroke="#10b981" name="Stream A" strokeWidth={2} />
               )}
@@ -1508,12 +1447,27 @@ const ResultsPerformance: React.FC = () => {
   };
 
   const renderStudentRankings = () => {
+    if (loading) {
+      return (
+        <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[3rem] bg-white overflow-hidden">
+          <div className="p-8 text-center">
+            <Loader2 className="w-12 h-12 text-slate-300 mx-auto mb-4 animate-spin" />
+            <p className="text-slate-500 font-medium">Loading results...</p>
+          </div>
+        </Card>
+      );
+    }
+
     if (filteredResults.length === 0) {
       return (
         <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[3rem] bg-white overflow-hidden">
           <div className="p-8 text-center">
             <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500 font-medium">No results found</p>
+            <p className="text-slate-500 font-medium">
+              {filters.classId && filters.termId && filters.gradingSystemId
+                ? 'No results found for the selected filters'
+                : 'Select a class, term, and grading system to view results'}
+            </p>
           </div>
         </Card>
       );
@@ -1532,15 +1486,15 @@ const ResultsPerformance: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowPercentiles(!showPercentages)}
+              onClick={() => setShowPercentages(!showPercentages)}
               className="px-3 py-1.5 bg-slate-100 rounded-lg text-xs font-bold flex items-center gap-1"
             >
               {showPercentages ? <Eye size={14} /> : <EyeOff size={14} />}
-              {showPercentages ? 'Show Percentages' : 'Show Points'}
+              {showPercentages ? 'Show Points' : 'Show Percentages'}
             </button>
           </div>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50">
@@ -1560,54 +1514,44 @@ const ResultsPerformance: React.FC = () => {
               {filteredResults.map((item, index) => {
                 const percentage = getMeanPercentage(item.meanPoints);
                 const trend = item.trend || 'stable';
-                
+
                 return (
-                  <tr 
-                    key={item.id} 
+                  <tr
+                    key={item.id}
                     className="hover:bg-slate-50/80 transition-all cursor-pointer"
                     onClick={() => {
-                      setFilters(prev => ({ ...prev, selectedStudentId: item.studentId }));
+                      updateFilters(prev => ({ ...prev, selectedStudentId: item.studentId }));
                       fetchStudentDetails(item.studentId);
                       setSelectedViewMode('student');
                     }}
                   >
                     <td className="px-6 py-4">
-                      <span className={`
-                        w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs
-                        ${index === 0 ? 'bg-emerald-500 text-white' : 
-                          index === 1 ? 'bg-blue-500 text-white' :
-                          index === 2 ? 'bg-amber-500 text-white' : 
-                          'bg-slate-100 text-slate-600'}
-                      `}>
-                        #{index + 1}
-                      </span>
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                        index === 0 ? 'bg-emerald-500 text-white' :
+                        index === 1 ? 'bg-blue-500 text-white' :
+                        index === 2 ? 'bg-amber-500 text-white' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>#{index + 1}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-bold text-slate-800">{item.studentName}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">
-                          {item.termName} • {item.academicYear}
-                        </p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">{item.termName} • {item.academicYear}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-mono text-slate-600">{item.admissionNumber}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold">
-                        {item.streamName || 'N/A'}
-                      </span>
+                      <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold">{item.streamName || 'N/A'}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-center gap-2">
                         <div className="w-full max-w-[100px] h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full ${
-                              item.meanPoints >= 8 ? 'bg-emerald-500' : 
-                              item.meanPoints >= 6 ? 'bg-amber-500' : 'bg-rose-500'
-                            }`} 
-                            style={{ width: `${percentage}%` }}
-                          />
+                          <div className={`h-full rounded-full ${
+                            item.meanPoints >= 8 ? 'bg-emerald-500' :
+                            item.meanPoints >= 6 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`} style={{ width: `${percentage}%` }} />
                         </div>
                         <span className="font-black text-slate-700">
                           {showPercentages ? `${percentage}%` : `${item.meanPoints.toFixed(1)} pts`}
@@ -1615,9 +1559,7 @@ const ResultsPerformance: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-3 py-1.5 rounded-xl border text-xs font-black shadow-sm ${
-                        getGradeColor(percentage)
-                      }`}>
+                      <span className={`px-3 py-1.5 rounded-xl border text-xs font-black shadow-sm ${getGradeColor(percentage)}`}>
                         {item.overallGrade}
                       </span>
                     </td>
@@ -1626,11 +1568,11 @@ const ResultsPerformance: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className={`inline-flex items-center gap-1 font-bold text-xs ${
-                        trend === 'up' ? 'text-emerald-500' : 
+                        trend === 'up' ? 'text-emerald-500' :
                         trend === 'down' ? 'text-rose-500' : 'text-slate-400'
                       }`}>
-                        {trend === 'up' ? <TrendingUp size={14} /> : 
-                         trend === 'down' ? <TrendingDown size={14} /> : 
+                        {trend === 'up' ? <TrendingUp size={14} /> :
+                         trend === 'down' ? <TrendingDown size={14} /> :
                          <Activity size={14} />}
                       </div>
                     </td>
@@ -1638,7 +1580,7 @@ const ResultsPerformance: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setFilters(prev => ({ ...prev, selectedStudentId: item.studentId }));
+                          updateFilters(prev => ({ ...prev, selectedStudentId: item.studentId }));
                           fetchStudentDetails(item.studentId);
                           setSelectedViewMode('student');
                         }}
@@ -1670,22 +1612,15 @@ const ResultsPerformance: React.FC = () => {
                 <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">Student Profile</p>
                 <h2 className="text-3xl font-black mt-2">{selectedStudent.name}</h2>
                 <div className="flex items-center gap-4 mt-4">
-                  <span className="px-4 py-2 bg-white/10 rounded-xl text-sm font-bold">
-                    {selectedStudent.admission}
-                  </span>
-                  <span className="px-4 py-2 bg-white/10 rounded-xl text-sm font-bold">
-                    {selectedStudent.class} • {selectedStudent.stream}
-                  </span>
+                  <span className="px-4 py-2 bg-white/10 rounded-xl text-sm font-bold">{selectedStudent.admission}</span>
+                  <span className="px-4 py-2 bg-white/10 rounded-xl text-sm font-bold">{selectedStudent.class} • {selectedStudent.stream}</span>
                   <span className="px-4 py-2 bg-white/10 rounded-xl text-sm font-bold flex items-center gap-2">
                     <CheckCircle2 size={14} className="text-emerald-400" />
                     Attendance: {selectedStudent.attendance}%
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedViewMode('class')}
-                className="p-3 bg-white/10 rounded-xl hover:bg-white/20"
-              >
+              <button onClick={() => setSelectedViewMode('class')} className="p-3 bg-white/10 rounded-xl hover:bg-white/20">
                 <XCircle size={20} />
               </button>
             </div>
@@ -1706,20 +1641,8 @@ const ResultsPerformance: React.FC = () => {
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="name" stroke="#64748b" />
                 <PolarRadiusAxis stroke="#64748b" domain={[0, 12]} />
-                <ReRadar
-                  name="Student"
-                  dataKey="points"
-                  stroke="#6366f1"
-                  fill="#6366f1"
-                  fillOpacity={0.3}
-                />
-                <ReRadar
-                  name="Class Average"
-                  dataKey="classAvg"
-                  stroke="#94a3b8"
-                  fill="#94a3b8"
-                  fillOpacity={0.1}
-                />
+                <ReRadar name="Student" dataKey="points" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
+                <ReRadar name="Class Average" dataKey="classAvg" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.1} />
                 <Legend />
                 <Tooltip />
               </RadarChart>
@@ -1751,13 +1674,10 @@ const ResultsPerformance: React.FC = () => {
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full ${
-                              subject.score >= 80 ? 'bg-emerald-500' :
-                              subject.score >= 60 ? 'bg-amber-500' : 'bg-rose-500'
-                            }`}
-                            style={{ width: `${subject.score}%` }}
-                          />
+                          <div className={`h-full rounded-full ${
+                            subject.score >= 80 ? 'bg-emerald-500' :
+                            subject.score >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`} style={{ width: `${subject.score}%` }} />
                         </div>
                         <span className="text-sm font-bold">{subject.score}%</span>
                       </div>
@@ -1766,11 +1686,8 @@ const ResultsPerformance: React.FC = () => {
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                         subject.grade === 'A' ? 'bg-emerald-100 text-emerald-700' :
                         subject.grade === 'B' ? 'bg-blue-100 text-blue-700' :
-                        subject.grade === 'C' ? 'bg-amber-100 text-amber-700' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        {subject.grade}
-                      </span>
+                        subject.grade === 'C' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                      }`}>{subject.grade}</span>
                     </td>
                     <td className="px-6 py-4 text-center font-bold">{subject.points}</td>
                     <td className="px-6 py-4 text-center text-slate-600">{subject.classAvg}</td>
@@ -1778,9 +1695,7 @@ const ResultsPerformance: React.FC = () => {
                       <span className={`text-sm font-bold ${
                         subject.percentile >= 80 ? 'text-emerald-600' :
                         subject.percentile >= 60 ? 'text-amber-600' : 'text-rose-600'
-                      }`}>
-                        {subject.percentile}%
-                      </span>
+                      }`}>{subject.percentile}%</span>
                     </td>
                   </tr>
                 ))}
@@ -1794,8 +1709,7 @@ const ResultsPerformance: React.FC = () => {
           <Card className="border-none shadow-xl rounded-3xl bg-white">
             <div className="p-6 border-b border-slate-100">
               <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-                <Award size={18} className="text-emerald-500" />
-                Strengths
+                <Award size={18} className="text-emerald-500" />Strengths
               </h3>
             </div>
             <div className="p-6">
@@ -1813,8 +1727,7 @@ const ResultsPerformance: React.FC = () => {
           <Card className="border-none shadow-xl rounded-3xl bg-white">
             <div className="p-6 border-b border-slate-100">
               <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-                <Target size={18} className="text-amber-500" />
-                Areas for Improvement
+                <Target size={18} className="text-amber-500" />Areas for Improvement
               </h3>
             </div>
             <div className="p-6">
@@ -1832,8 +1745,7 @@ const ResultsPerformance: React.FC = () => {
           <Card className="col-span-2 border-none shadow-xl rounded-3xl bg-white">
             <div className="p-6 border-b border-slate-100">
               <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-                <Sparkles size={18} className="text-purple-500" />
-                Recommendations
+                <Sparkles size={18} className="text-purple-500" />Recommendations
               </h3>
             </div>
             <div className="p-6">
@@ -1865,43 +1777,37 @@ const ResultsPerformance: React.FC = () => {
             Academic Insights
             {stats && (
               <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-bold">
-                {selectedViewMode === 'class' ? 'Class View' : 
+                {selectedViewMode === 'class' ? 'Class View' :
                  selectedViewMode === 'stream' ? 'Stream View' : 'Student View'}
               </span>
             )}
           </h1>
           <p className="text-slate-500 font-medium">
-            {stats?.summary?.gradingSystemName 
+            {stats?.summary?.gradingSystemName
               ? `Using ${stats.summary.gradingSystemName} Grading • ${filters.streamId ? 'Filtered by stream' : 'All streams'}`
               : 'Visualizing student performance and grading trends'}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3 relative">
           {/* Chart Type Toggle */}
           <div className="flex items-center bg-white border border-slate-200 rounded-2xl p-1">
-            <button
-              onClick={() => setChartType('bar')}
-              className={`p-2 rounded-xl transition-colors ${chartType === 'bar' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}
-            >
+            <button onClick={() => setChartType('bar')}
+              className={`p-2 rounded-xl transition-colors ${chartType === 'bar' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>
               <BarChart2 size={18} />
             </button>
-            <button
-              onClick={() => setChartType('line')}
-              className={`p-2 rounded-xl transition-colors ${chartType === 'line' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}
-            >
+            <button onClick={() => setChartType('line')}
+              className={`p-2 rounded-xl transition-colors ${chartType === 'line' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>
               <LineChart size={18} />
             </button>
-            <button
-              onClick={() => setChartType('radar')}
-              className={`p-2 rounded-xl transition-colors ${chartType === 'radar' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}
-            >
+            <button onClick={() => setChartType('radar')}
+              className={`p-2 rounded-xl transition-colors ${chartType === 'radar' ? 'bg-slate-900 text-white' : 'text-slate-400'}`}>
               <Radar size={18} />
             </button>
           </div>
 
           {/* Filter Button */}
-          <button 
+          <button
             className="relative p-3 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:shadow-lg transition-all"
             onClick={() => setShowFilters(!showFilters)}
           >
@@ -1910,21 +1816,17 @@ const ResultsPerformance: React.FC = () => {
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
             )}
           </button>
-          
+
           {/* Export Button */}
-          <button 
+          <button
             className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50"
             disabled={exportLoading || !filters.classId || !filters.termId || !filters.gradingSystemId}
             onClick={() => setShowExportModal(true)}
           >
-            {exportLoading ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <DownloadCloud size={18} />
-            )}
+            {exportLoading ? <Loader2 size={18} className="animate-spin" /> : <DownloadCloud size={18} />}
             Export
           </button>
-          
+
           {showFilters && renderFilterDropdown()}
         </div>
       </div>
@@ -1935,41 +1837,31 @@ const ResultsPerformance: React.FC = () => {
           {selectedAcademicYear && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <Calendar size={14} />
-              <span className="font-medium">
-                {academicYears.find(y => y.id === selectedAcademicYear)?.year_name || 'Academic Year'}
-              </span>
+              <span className="font-medium">{academicYears.find(y => y.id === selectedAcademicYear)?.year_name || 'Academic Year'}</span>
             </div>
           )}
           {filters.classId && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <Users size={14} />
-              <span className="font-medium">
-                {classes.find(c => c.id === filters.classId)?.class_name || 'Class'}
-              </span>
+              <span className="font-medium">{classes.find(c => c.id === filters.classId)?.class_name || 'Class'}</span>
             </div>
           )}
           {filters.streamId && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <Layers size={14} />
-              <span className="font-medium">
-                {streams.find(s => s.id === filters.streamId)?.name || 'Stream'}
-              </span>
+              <span className="font-medium">{streams.find(s => s.id === filters.streamId)?.name || 'Stream'}</span>
             </div>
           )}
           {filters.termId && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <Clock size={14} />
-              <span className="font-medium">
-                {terms.find(t => t.id === filters.termId)?.name || 'Term'}
-              </span>
+              <span className="font-medium">{terms.find(t => t.id === filters.termId)?.name || 'Term'}</span>
             </div>
           )}
           {filters.curriculumId && (
             <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
               <BookOpen size={14} />
-              <span className="font-medium">
-                {curricula.find(c => c.id === filters.curriculumId)?.name || ''}
-              </span>
+              <span className="font-medium">{curricula.find(c => c.id === filters.curriculumId)?.name || ''}</span>
             </div>
           )}
         </div>
@@ -2004,5 +1896,6 @@ const ResultsPerformance: React.FC = () => {
     </div>
   );
 };
+
 
 export default ResultsPerformance;

@@ -2546,6 +2546,264 @@ export const resultsAPI = {
     return `Results_Export_${date}.${type === 'pdf' ? 'pdf' : 'xlsx'}`;
   }
 };
+export interface TeacherStream {
+  id: string;
+  name: string;
+  stream_code: string;
+}
+
+export interface TeacherSubject {
+  id: string;
+  name: string;
+  subject_code: string;
+  category?: string;
+  is_compulsory: boolean;
+}
+
+export interface TeacherAssignment {
+  classId: string;
+  className: string;
+  classCode: string;
+  streams: TeacherStream[];
+  subjects: TeacherSubject[];
+}
+
+export interface AcademicYear {
+  id: string;
+  year_name: string;
+  is_current: boolean;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface Term {
+  id: string;
+  term_name: string;
+  academic_year_id: string;
+  is_active: boolean;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface TeacherAssignedDataResponse {
+  assignments: TeacherAssignment[];
+  currentAcademicYear?: AcademicYear;
+  activeTerms?: Term[];
+  teacherId: string;
+  schoolId: string;
+}
+
+// ============================================
+// STUDENT ASSIGNMENT TYPES
+// ============================================
+
+export interface StudentForAssignment {
+  id: string;
+  first_name: string;
+  last_name: string;
+  fullName: string;
+  admission_number: string;
+  stream_id?: string;
+  stream?: {
+    name: string;
+  };
+  isAssigned: boolean;
+  assignmentStatus: 'assigned' | 'unassigned' | 'pending' | 'dropped';
+  assignedDate?: string;
+}
+
+export interface StudentsForAssignmentParams {
+  classId: string;
+  subjectId: string;
+  termId: string;
+  streamId?: string;
+}
+
+export interface StudentsForAssignmentResponse {
+  students: StudentForAssignment[];
+  total: number;
+  assigned: number;
+  unassigned: number;
+}
+
+// ============================================
+// BULK ASSIGNMENT TYPES
+// ============================================
+
+export interface BulkAssignmentParams {
+  classId: string;
+  subjectId: string;
+  termId: string;
+  academicYearId: string;
+  streamId?: string;
+  overwriteExisting?: 'true' | 'false';
+}
+
+export interface BulkAssignmentFileData {
+  admissionNumber?: string;
+  studentId?: string;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  [key: string]: any;
+}
+
+export interface BulkAssignmentResult {
+  batchId: string;
+  summary: {
+    total: number;
+    successful: number;
+    skipped: number;
+    failed: number;
+  };
+  results: {
+    successful: Array<{
+      studentId: string;
+      status: 'created' | 'updated';
+    }>;
+    skipped: Array<{
+      studentId: string;
+      status: 'skipped';
+      reason: string;
+    }>;
+    failed: Array<{
+      studentId: string;
+      status: 'failed';
+      reason: string;
+    }>;
+  };
+  processingTime: number;
+  optimalBatchSize: number;
+}
+
+// ============================================
+// SINGLE ASSIGNMENT TYPES
+// ============================================
+
+export interface SingleAssignmentParams {
+  studentId: string;
+  subjectId: string;
+  classId: string;
+  termId: string;
+  academicYearId: string;
+  streamId?: string;
+  isElective?: 'true' | 'false';
+  contributesToFinalGrade?: 'true' | 'false';
+  overwrite?: 'true' | 'false';
+}
+
+export interface StudentSubjectAssignment {
+  id: string;
+  student_id: string;
+  subject_id: string;
+  class_id: string;
+  stream_id?: string;
+  academic_year_id: string;
+  term_id: string;
+  is_elective: boolean;
+  contributes_to_final_grade: boolean;
+  status: 'active' | 'dropped' | 'completed';
+  enrollment_date: string;
+  created_at: string;
+  updated_at: string;
+  student?: {
+    first_name: string;
+    last_name: string;
+    admission_number: string;
+  };
+  subject?: {
+    name: string;
+    subject_code: string;
+  };
+}
+
+export interface SingleAssignmentResponse {
+  assignment: StudentSubjectAssignment;
+  action: 'created' | 'updated';
+}
+
+// ============================================
+// BATCH OPERATION TYPES
+// ============================================
+
+export type BatchStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'partial';
+
+export interface BatchOperation {
+  id: string;
+  school_id: string;
+  operation_type: string;
+  status: BatchStatus;
+  total_records: number;
+  processed_records: number;
+  batch_size: number;
+  metadata: {
+    teacherId: string;
+    classId: string;
+    subjectId: string;
+    streamId?: string;
+    termId: string;
+    academicYearId: string;
+    filename?: string;
+    lastBatchCompleted?: number;
+    results?: {
+      successful: number;
+      failed: number;
+      skipped: number;
+    };
+    finalResults?: BulkAssignmentResult['results'];
+  };
+  created_by: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface BatchStatusResponse {
+  batch: BatchOperation;
+}
+
+export interface AssignmentHistoryParams {
+  page?: number;
+  limit?: number;
+}
+
+export interface AssignmentHistoryResponse {
+  batches: BatchOperation[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+// ============================================
+// TEMPLATE DOWNLOAD TYPES
+// ============================================
+
+export interface DownloadTemplateParams {
+  format?: 'csv' | 'excel';
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  meta?: {
+    requestId?: string;
+    processingTime?: number;
+    cached?: boolean;
+    stale?: boolean;
+    [key: string]: any;
+  };
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 export const teacherAPI = {
   // Assignments (Deprecated - use assignmentAPI instead)
   getMyAssignments: (params?: {
@@ -2784,11 +3042,7 @@ duplicateScheme: async (schemeId: string, data: DuplicateSchemeData = {}): Promi
     }
   },
 
-  /* ==============================
-     RECORDS OF WORK API
-  ============================== */
-  
-  // 1. Get all records for the teacher
+
   getMyRecordsOfWork: async (params = {}) => {
     try {
       const response = await api.get('/teachers/records', { params });
@@ -2913,11 +3167,7 @@ duplicateScheme: async (schemeId: string, data: DuplicateSchemeData = {}): Promi
     }
   },
 
-  /* ==============================
-     DASHBOARD & STATISTICS API
-  ============================== */
-  
-  // Get teacher dashboard statistics
+
   getDashboardStats: async () => {
     try {
       const response = await api.get('/teachers/dashboard/stats');
@@ -2959,11 +3209,6 @@ submitBulkScoresJUMA: async (data: {
     }
   },
 
-  /* ==============================
-     UTILITY & HELPER API
-  ============================== */
-  
-  // Get available academic years
   getAcademicYears: async () => {
     try {
       const response = await api.get('/teacher/academic-years');
@@ -3018,6 +3263,119 @@ submitBulkScoresJUMA: async (data: {
     try {
       const response = await api.get(`/teacher/terms/${termId}/weeks`);
       return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+  getTeacherAssignedData: async (): Promise<ApiResponse<TeacherAssignedDataResponse>> => {
+    try {
+      const response = await api.get('/teachers/assigned-data');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * 📋 Get students for a specific class/stream for assignment UI
+   * GET /api/v1/teacher/students-for-assignment
+   */
+  getStudentsForAssignment: async (
+    params: StudentsForAssignmentParams
+  ): Promise<ApiResponse<StudentsForAssignmentResponse>> => {
+    try {
+      const response = await api.get('/teachers/students-for-assignment', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * 📤 Bulk upload CSV/Excel file for student subject assignment
+   * POST /api/v1/teacher/assign-subjects/bulk
+   */
+  bulkAssignSubjects: async (
+    data: BulkAssignmentParams & { file: File }
+  ): Promise<ApiResponse<BulkAssignmentResult>> => {
+    try {
+      const formData = new FormData();
+      
+      // Append all fields to formData
+      Object.entries(data).forEach(([key, value]) => {
+        if (key !== 'file') {
+          formData.append(key, String(value));
+        }
+      });
+      formData.append('file', data.file);
+
+      const response = await api.post('/teachers/assign-subjects/bulk', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * 📝 Assign a single student to a subject
+   * POST /api/v1/teacher/assign-subjects/single
+   */
+  assignSingleSubject: async (
+    data: SingleAssignmentParams
+  ): Promise<ApiResponse<SingleAssignmentResponse>> => {
+    try {
+      const response = await api.post('/teachers/assign-subjects/single', data);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * 📥 Download template CSV/Excel file
+   * GET /api/v1/teacher/download-template
+   */
+  downloadTemplate: async (
+    params: DownloadTemplateParams = { format: 'csv' }
+  ): Promise<Blob> => {
+    try {
+      const response = await api.get('/teachers/download-template', {
+        params,
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * 📊 Get batch operation status
+   * GET /api/v1/teacher/batch-status/:batchId
+   */
+  getBatchStatus: async (batchId: string): Promise<ApiResponse<BatchStatusResponse>> => {
+    try {
+      const response = await api.get(`/teachers/batch-status/${batchId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * 📜 Get teacher's assignment history
+   * GET /api/v1/teacher/assignment-history
+   */
+  getAssignmentHistory: async (
+    params?: AssignmentHistoryParams
+  ): Promise<ApiResponse<AssignmentHistoryResponse>> => {
+    try {
+      const response = await api.get('/teachers/assignment-history', { params });
+      return response.data;
     } catch (error) {
       throw error;
     }
