@@ -91,6 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role, schoolSlug }) => {
     ],
     teacher: [
       { label: "Dashboard", path: buildPath("teacher/dashboard"), icon: <LayoutDashboard size={20} /> },
+      { label: "Student&Subjects", path: buildPath("teacher/subject-assignment"), icon: <BookOpen size={20} /> },
       { label: "My Classes", path: buildPath("teacher/classes"), icon: <Users size={20} /> },
       { label: "Subjects Assigned", path: buildPath("teacher/subjects"), icon: <BookOpen size={20} /> },
       { label: "Score Submission", path: buildPath("teacher/scores"), icon: <ClipboardCheck size={20} /> },

@@ -28,6 +28,7 @@ import Notices from "./pages/teacher/Notices";
 import LessonPlan from "./pages/teacher/LessonPlan";
 import RecordOfWorkCovered from "./pages/teacher/RecordOfWorkCovered";
 import MySchemes from "./pages/teacher/MySchemes";
+import StudentSubjectAssignment from "./pages/teacher/StudentSubjectAssignment";
 // Parent Pages
 import ParentDashboard from "./pages/parent/Dashboard";
 import Results from "./pages/parent/Results";
@@ -193,6 +194,13 @@ function App() {
             <ProtectedRoute allowedRoles={["teacher"]}>
               <DashboardLayout role="teacher">
                 <Assignments />
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+             <Route path="subject-assignment" element={
+            <ProtectedRoute allowedRoles={["teacher"]}>
+              <DashboardLayout role="teacher">
+                <StudentSubjectAssignment />
               </DashboardLayout>
             </ProtectedRoute>
           } />

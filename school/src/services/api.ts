@@ -2549,7 +2549,7 @@ export const resultsAPI = {
 export interface TeacherStream {
   id: string;
   name: string;
-  stream_code: string;
+
 }
 
 export interface TeacherSubject {
@@ -2559,7 +2559,6 @@ export interface TeacherSubject {
   category?: string;
   is_compulsory: boolean;
 }
-
 export interface TeacherAssignment {
   classId: string;
   className: string;
@@ -2572,19 +2571,21 @@ export interface AcademicYear {
   id: string;
   year_name: string;
   is_current: boolean;
+
+  school_id?: string;
   start_date?: string;
   end_date?: string;
-}
-
+} 
 export interface Term {
   id: string;
   term_name: string;
   academic_year_id: string;
   is_active: boolean;
+
+  school_id?: string;
   start_date?: string;
   end_date?: string;
 }
-
 export interface TeacherAssignedDataResponse {
   assignments: TeacherAssignment[];
   currentAcademicYear?: AcademicYear;
@@ -3180,7 +3181,7 @@ duplicateScheme: async (schemeId: string, data: DuplicateSchemeData = {}): Promi
   // Get teaching workload
   getTeachingWorkload: async (params = {}) => {
     try {
-      const response = await api.get('/teacher/workload', { params });
+      const response = await api.get('/teachers/workload', { params });
       return response;
     } catch (error) {
       throw error;
@@ -3202,7 +3203,7 @@ submitBulkScoresJUMA: async (data: {
   // Get upcoming deadlines
   getUpcomingDeadlines: async (params = {}) => {
     try {
-      const response = await api.get('/teacher/deadlines', { params });
+      const response = await api.get('/teachers/deadlines', { params });
       return response;
     } catch (error) {
       throw error;
@@ -3211,7 +3212,7 @@ submitBulkScoresJUMA: async (data: {
 
   getAcademicYears: async () => {
     try {
-      const response = await api.get('/teacher/academic-years');
+      const response = await api.get('/teachers/academic-years');
       return response;
     } catch (error) {
       throw error;
@@ -3221,7 +3222,7 @@ submitBulkScoresJUMA: async (data: {
   // Get available terms
   getTerms: async (params = {}) => {
     try {
-      const response = await api.get('/teacher/terms', { params });
+      const response = await api.get('/teachers/terms', { params });
       return response;
     } catch (error) {
       throw error;
@@ -3231,7 +3232,7 @@ submitBulkScoresJUMA: async (data: {
   // Get teacher's classes
   getTeacherClasses: async () => {
     try {
-      const response = await api.get('/teacher/classes');
+      const response = await api.get('/teachers/classes');
       return response;
     } catch (error) {
       throw error;
@@ -3241,7 +3242,7 @@ submitBulkScoresJUMA: async (data: {
   // Get teacher's subjects
   getTeacherSubjects: async (params = {}) => {
     try {
-      const response = await api.get('/teacher/subjects', { params });
+      const response = await api.get('/teachers/subjects', { params });
       return response;
     } catch (error) {
       throw error;
@@ -3251,7 +3252,7 @@ submitBulkScoresJUMA: async (data: {
   // Get teacher's streams
   getTeacherStreams: async (params = {}) => {
     try {
-      const response = await api.get('/teacher/streams', { params });
+      const response = await api.get('/teachers/streams', { params });
       return response;
     } catch (error) {
       throw error;
@@ -3261,7 +3262,7 @@ submitBulkScoresJUMA: async (data: {
   // Get weeks for term
   getTermWeeks: async (termId) => {
     try {
-      const response = await api.get(`/teacher/terms/${termId}/weeks`);
+      const response = await api.get(`/teachers/terms/${termId}/weeks`);
       return response;
     } catch (error) {
       throw error;
@@ -3269,7 +3270,7 @@ submitBulkScoresJUMA: async (data: {
   },
   getTeacherAssignedData: async (): Promise<ApiResponse<TeacherAssignedDataResponse>> => {
     try {
-      const response = await api.get('/teachers/assigned-data');
+      const response = await api.get('/teacher/assigned-data');
       return response.data;
     } catch (error) {
       throw error;
@@ -3284,7 +3285,7 @@ submitBulkScoresJUMA: async (data: {
     params: StudentsForAssignmentParams
   ): Promise<ApiResponse<StudentsForAssignmentResponse>> => {
     try {
-      const response = await api.get('/teachers/students-for-assignment', { params });
+      const response = await api.get('/teacher/students-for-assignment', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -3309,7 +3310,7 @@ submitBulkScoresJUMA: async (data: {
       });
       formData.append('file', data.file);
 
-      const response = await api.post('/teachers/assign-subjects/bulk', formData, {
+      const response = await api.post('/teacher/assign-subjects/bulk', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -3328,7 +3329,7 @@ submitBulkScoresJUMA: async (data: {
     data: SingleAssignmentParams
   ): Promise<ApiResponse<SingleAssignmentResponse>> => {
     try {
-      const response = await api.post('/teachers/assign-subjects/single', data);
+      const response = await api.post('/teacher/assign-subjects/single', data);
       return response.data;
     } catch (error) {
       throw error;
@@ -3343,7 +3344,7 @@ submitBulkScoresJUMA: async (data: {
     params: DownloadTemplateParams = { format: 'csv' }
   ): Promise<Blob> => {
     try {
-      const response = await api.get('/teachers/download-template', {
+      const response = await api.get('/teacher/download-template', {
         params,
         responseType: 'blob'
       });
@@ -3359,7 +3360,7 @@ submitBulkScoresJUMA: async (data: {
    */
   getBatchStatus: async (batchId: string): Promise<ApiResponse<BatchStatusResponse>> => {
     try {
-      const response = await api.get(`/teachers/batch-status/${batchId}`);
+      const response = await api.get(`/teacher/batch-status/${batchId}`);
       return response.data;
     } catch (error) {
       throw error;
@@ -3374,7 +3375,7 @@ submitBulkScoresJUMA: async (data: {
     params?: AssignmentHistoryParams
   ): Promise<ApiResponse<AssignmentHistoryResponse>> => {
     try {
-      const response = await api.get('/teachers/assignment-history', { params });
+      const response = await api.get('/teacher/assignment-history', { params });
       return response.data;
     } catch (error) {
       throw error;
