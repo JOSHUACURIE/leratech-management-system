@@ -1136,154 +1136,211 @@ const handleFileUpload = (file: File) => {
               </Card>
             )}
 
-            {/* Preview Tab */}
-            {activeTab === 'preview' && uploadedFile && (
-              <Card className="border-none shadow-xl shadow-slate-200/50 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                      <Eye size={20} className="text-indigo-500" />
-                      File Preview
-                    </h3>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {uploadedFile.file.name} ({(uploadedFile.file.size / 1024).toFixed(2)} KB)
-                    </p>
+           {/* Preview Tab */}
+{activeTab === 'preview' && uploadedFile && (
+  <Card className="border-none shadow-xl shadow-slate-200/50 rounded-2xl p-6">
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <Eye size={20} className="text-indigo-500" />
+          File Preview
+        </h3>
+        <p className="text-sm text-slate-500 mt-1">
+          {uploadedFile.file.name} ({(uploadedFile.file.size / 1024).toFixed(2)} KB) • {uploadedFile.preview.length} records shown
+        </p>
+      </div>
+      <button
+        onClick={clearUpload}
+        className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+        title="Clear upload"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+
+    {/* Validation Messages */}
+    {uploadedFile.errors.length > 0 && (
+      <div className="mb-4 p-4 bg-rose-50 border border-rose-200 rounded-xl">
+        <h4 className="text-sm font-semibold text-rose-700 mb-2 flex items-center gap-2">
+          <AlertTriangle size={16} />
+          Validation Errors
+        </h4>
+        <ul className="list-disc list-inside text-xs text-rose-600 space-y-1">
+          {uploadedFile.errors.map((err, idx) => (
+            <li key={idx}>{err}</li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {uploadedFile.warnings.length > 0 && (
+      <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <h4 className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-2">
+          <Info size={16} />
+          Warnings
+        </h4>
+        <ul className="list-disc list-inside text-xs text-amber-600 space-y-1">
+          {uploadedFile.warnings.map((warn, idx) => (
+            <li key={idx}>{warn}</li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {/* Preview Table */}
+    <div className="border border-slate-200 rounded-xl overflow-hidden mb-6">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">#</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Admission Number</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">First Name</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Last Name</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Full Name</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {uploadedFile.preview.map((row, idx) => {
+              // Handle different column name formats
+              const admissionNumber = row.admission_number || row.admissionNumber || row.admissionnumber || '-';
+              const firstName = row.first_name || row.firstName || row.firstname || '';
+              const lastName = row.last_name || row.lastName || row.lastname || '';
+              const fullName = row.full_name || row.fullName || row.fullname || row.name || 
+                              `${firstName} ${lastName}`.trim() || '-';
+              
+              return (
+                <tr key={idx} className="hover:bg-slate-50/50">
+                  <td className="px-4 py-3 text-sm text-slate-500 font-mono">{idx + 1}</td>
+                  <td className="px-4 py-3 text-sm font-mono text-indigo-600 font-medium">
+                    {admissionNumber}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-700">
+                    {firstName || '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-700">
+                    {lastName || '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-700">
+                    {fullName}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      
+      {uploadedFile.preview.length === 0 && (
+        <div className="text-center py-8">
+          <FileText className="mx-auto text-slate-300 mb-2" size={32} />
+          <p className="text-slate-500">No preview data available</p>
+        </div>
+      )}
+    </div>
+
+    {/* Submit Button */}
+    {uploadedFile.isValid && (
+      <div className="space-y-4">
+        {/* Progress Bar */}
+        {uploadProgress > 0 && uploadProgress < 100 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Uploading...</span>
+              <span className="font-medium text-indigo-600">{uploadProgress}%</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${getProgressColor(uploadProgress)} transition-all duration-300`}
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmitAssignment}
+          disabled={submitting || !uploadedFile.isValid}
+          className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              Processing {uploadedFile.preview.length} students...
+            </>
+          ) : (
+            <>
+              <Upload size={18} />
+              Upload and Assign {uploadedFile.preview.length} Student{uploadedFile.preview.length !== 1 ? 's' : ''}
+            </>
+          )}
+        </button>
+      </div>
+    )}
+
+    {/* Upload Result */}
+    {uploadResult && (
+      <div className="mt-6 p-6 bg-slate-50 rounded-xl border border-slate-200">
+        <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-emerald-500" />
+          Upload Complete
+        </h4>
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center p-3 bg-emerald-50 rounded-lg">
+            <p className="text-2xl font-bold text-emerald-600">{uploadResult.summary.successful}</p>
+            <p className="text-xs text-emerald-700 font-medium">Successful</p>
+          </div>
+          <div className="text-center p-3 bg-amber-50 rounded-lg">
+            <p className="text-2xl font-bold text-amber-600">{uploadResult.summary.skipped}</p>
+            <p className="text-xs text-amber-700 font-medium">Skipped</p>
+          </div>
+          <div className="text-center p-3 bg-rose-50 rounded-lg">
+            <p className="text-2xl font-bold text-rose-600">{uploadResult.summary.failed}</p>
+            <p className="text-xs text-rose-700 font-medium">Failed</p>
+          </div>
+        </div>
+        
+        {/* Detailed Results */}
+        {(uploadResult.results.successful.length > 0 || 
+          uploadResult.results.skipped.length > 0 || 
+          uploadResult.results.failed.length > 0) && (
+          <div className="mt-4 text-xs">
+            <details className="cursor-pointer">
+              <summary className="text-indigo-600 hover:text-indigo-800 font-medium">
+                View Details
+              </summary>
+              <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                {uploadResult.results.successful.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-emerald-600">
+                    <CheckCircle2 size={12} />
+                    <span>Student {item.studentId}: {item.status}</span>
                   </div>
-                  <button
-                    onClick={clearUpload}
-                    className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-
-                {/* Validation Messages */}
-                {uploadedFile.errors.length > 0 && (
-                  <div className="mb-4 p-4 bg-rose-50 border border-rose-200 rounded-xl">
-                    <h4 className="text-sm font-semibold text-rose-700 mb-2 flex items-center gap-2">
-                      <AlertTriangle size={16} />
-                      Validation Errors
-                    </h4>
-                    <ul className="list-disc list-inside text-xs text-rose-600 space-y-1">
-                      {uploadedFile.errors.map((err, idx) => (
-                        <li key={idx}>{err}</li>
-                      ))}
-                    </ul>
+                ))}
+                {uploadResult.results.skipped.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-amber-600">
+                    <AlertCircle size={12} />
+                    <span>Student {item.studentId}: {item.reason}</span>
                   </div>
-                )}
-
-                {uploadedFile.warnings.length > 0 && (
-                  <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <h4 className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-2">
-                      <Info size={16} />
-                      Warnings
-                    </h4>
-                    <ul className="list-disc list-inside text-xs text-amber-600 space-y-1">
-                      {uploadedFile.warnings.map((warn, idx) => (
-                        <li key={idx}>{warn}</li>
-                      ))}
-                    </ul>
+                ))}
+                {uploadResult.results.failed.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-rose-600">
+                    <AlertTriangle size={12} />
+                    <span>Student {item.studentId}: {item.reason}</span>
                   </div>
-                )}
-
-                {/* Preview Table */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden mb-6">
-                  <table className="w-full">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">#</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Admission Number</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Student ID</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Full Name</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {uploadedFile.preview.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="px-4 py-3 text-sm text-slate-500">{idx + 1}</td>
-                          <td className="px-4 py-3 text-sm font-mono text-slate-700">
-                            {row.admission_number || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-mono text-slate-700">
-                            {row.student_id || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-700">
-                            {row.full_name || row.fullname || row.name || '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Submit Button */}
-                {uploadedFile.isValid && (
-                  <div className="space-y-4">
-                    {/* Progress Bar */}
-                    {uploadProgress > 0 && uploadProgress < 100 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-600">Uploading...</span>
-                          <span className="font-medium text-indigo-600">{uploadProgress}%</span>
-                        </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${getProgressColor(uploadProgress)} transition-all duration-300`}
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleSubmitAssignment}
-                      disabled={submitting || !uploadedFile.isValid}
-                      className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          Processing with JUMA...
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={18} />
-                          Upload and Assign {uploadedFile.preview.length}+ Students
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Upload Result */}
-                {uploadResult && (
-                  <div className="mt-6 p-6 bg-slate-50 rounded-xl border border-slate-200">
-                    <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                      <CheckCircle2 size={16} className="text-emerald-500" />
-                      Upload Complete
-                    </h4>
-                    <div className="grid grid-cols-3 gap-4 mb-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-emerald-600">{uploadResult.summary.successful}</p>
-                        <p className="text-xs text-slate-500">Successful</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-amber-600">{uploadResult.summary.skipped}</p>
-                        <p className="text-xs text-slate-500">Skipped</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-rose-600">{uploadResult.summary.failed}</p>
-                        <p className="text-xs text-slate-500">Failed</p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-slate-500 text-center">
-                      Processed in {(uploadResult.processingTime / 1000).toFixed(2)}s • 
-                      Batch size: {uploadResult.optimalBatchSize}
-                    </p>
-                  </div>
-                )}
-              </Card>
-            )}
+                ))}
+              </div>
+            </details>
+          </div>
+        )}
+        
+        <p className="text-xs text-slate-500 text-center mt-4 pt-4 border-t border-slate-200">
+          Processed in {(uploadResult.processingTime / 1000).toFixed(2)}s • 
+          Optimal batch size: {uploadResult.optimalBatchSize}
+        </p>
+      </div>
+    )}
+  </Card>
+)}
 
             {/* History Tab */}
             {activeTab === 'history' && (
