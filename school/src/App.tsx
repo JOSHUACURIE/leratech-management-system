@@ -14,7 +14,7 @@ import SchoolSettings from "./pages/admin/SchoolSettings";
 import AuditLogs from "./pages/admin/AuditLogs";
 import ToolsUtilities from "./pages/admin/ToolsUtilities";
 import Teachers from "./pages/admin/Teacher";
-
+import RubricManagement from "./pages/admin/RubricManagement";
 // Teacher Pages
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import SubjectsAssigned from "./pages/teacher/SubjectsAssigned";
@@ -106,6 +106,13 @@ function App() {
             <ProtectedRoute allowedRoles={["admin"]}>
               <DashboardLayout role="admin">
                 <AcademicSetup />
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+           <Route path="rubrics" element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <DashboardLayout role="admin">
+                <RubricManagement />
               </DashboardLayout>
             </ProtectedRoute>
           } />

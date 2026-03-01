@@ -84,6 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role, schoolSlug }) => {
       { label: "Fee Management", path: buildPath("admin/fees"), icon: <Wallet size={20} /> },
       { label: "Student Registry", path: buildPath("admin/students"), icon: <Users size={20} /> },
       { label: "Performance", path: buildPath("admin/results"), icon: <LineChart size={20} /> },
+     { label: "Rubric Management", path: buildPath("admin/rubrics"), icon: <BookOpen size={20} /> },
       { label: "System Reports", path: buildPath("admin/reports"), icon: <BarChart3 size={20} /> },
       { label: "School Settings", path: buildPath("admin/settings"), icon: <Settings size={20} /> },
       { label: "Audit Logs", path: buildPath("admin/logs"), icon: <Terminal size={20} /> },

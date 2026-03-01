@@ -397,10 +397,7 @@ const handleForgotPassword = async (e: React.FormEvent) => {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg">
             <GraduationCap size={24} className="text-white" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">LeraTech SMS</h1>
-            <p className="text-sm text-slate-600">School Management System</p>
-          </div>
+         
         </div>
       </div>
 

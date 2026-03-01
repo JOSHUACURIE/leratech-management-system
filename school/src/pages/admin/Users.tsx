@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { 
   Search, UserPlus, MoreVertical, Filter, Download, UserCheck, 
   ShieldAlert, Users as UsersIcon, Activity, Mail, Phone, Edit3, 
@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import Card from "../../components/common/Card";
 import CreateUserModal from "../../components/modals/CreateUserModal";
-import api from "../../services/api";
+import api, { authAPI } from "../../services/api";
 
 // Types for our user data
 type UserRole = "admin" | "teacher" | "bursar" | "parent" | "student" | "secretary" | "support_staff";
@@ -37,22 +37,23 @@ const Users: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   
-  // Fetch users from API
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get("/auth/users");
-        setUsers(response.data?.data || []);
-      } catch (error) {
-        console.error("Failed to fetch users:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchUsers();
-  }, []);
+ // Fetch users from API
+useEffect(() => {
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      // Get all users from the auth/users endpoint
+      const response = await api.get("/auth/users");
+      setUsers(response.data?.data || []);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  fetchUsers();
+}, []);
 
   const tabs: (UserRole | "all")[] = ["all", "admin", "teacher", "student", "parent", "bursar", "secretary", "support_staff"];
 

@@ -1,11 +1,12 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api/v1',
+  baseURL: 'http://localhost:3000/api/v1',  
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Request interceptor
@@ -15,6 +16,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Log requests in development
+    if (import.meta.env.DEV) {
+      console.log(`🚀 [API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    }
+    
     return config;
   },
   (error) => Promise.reject(error)
@@ -22,60 +29,128 @@ api.interceptors.request.use(
 
 // Response interceptor
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Log responses in development
+    if (import.meta.env.DEV) {
+      console.log(`✅ [API Response] ${response.status} from ${response.config.url}`);
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response) {
-      const { status, data } = error.response;
-
-      let errorMessage = data?.error || data?.message || 'Something went wrong';
-
-      if (data?.errors) {
-        errorMessage += `: ${Object.values(data.errors).join(', ')}`;
+    // Handle network errors (no response received)
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        return Promise.reject({
+          message: 'Request timeout. Please check your connection.',
+          isNetworkError: true,
+          isTimeout: true,
+          status: null,
+        });
       }
-
-      const formattedError = {
-        message: errorMessage,
-        status,
-        data,
-        isNetworkError: false,
-        isAuthError: status === 401 || status === 403,
-        isValidationError: status === 400,
-        isServerError: status >= 500,
-      };
-
-      if (status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
-
-        console.warn('Access token expired or invalid → logging out');
-        
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('school');
-        
-        window.location.href = '/login';
-        
-        return Promise.reject(formattedError);
-      }
-
-      return Promise.reject(formattedError);
-    } else if (error.request) {
+      
       return Promise.reject({
-        message: 'Network error. Please check your connection.',
+        message: 'Network error. Please check if the server is running.',
         isNetworkError: true,
         status: null,
       });
-    } else {
-      return Promise.reject({
-        message: error.message || 'Request failed',
-        isNetworkError: false,
-        status: null,
+    }
+
+    // Handle response errors
+    const { status, data } = error.response;
+    
+    // Format error message
+    let errorMessage = data?.error || data?.message || data?.msg || 'Something went wrong';
+    
+    if (data?.errors) {
+      if (typeof data.errors === 'object') {
+        errorMessage = Object.values(data.errors).join(', ');
+      } else {
+        errorMessage += `: ${data.errors}`;
+      }
+    }
+
+    const formattedError = {
+      message: errorMessage,
+      status,
+      data,
+      isNetworkError: false,
+      isAuthError: status === 401 || status === 403,
+      isValidationError: status === 400 || status === 422,
+      isServerError: status >= 500,
+    };
+
+    // Handle 401 Unauthorized - Token expired or invalid
+    if (status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      console.warn('Access token expired or invalid → logging out');
+      
+      // Clear all auth data
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('school');
+      
+      // Redirect to login if not already there
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+      
+      return Promise.reject(formattedError);
+    }
+
+    // Handle 403 Forbidden
+    if (status === 403) {
+      console.error('Access forbidden - insufficient permissions');
+    }
+
+    // Handle 404 Not Found
+    if (status === 404) {
+      console.error('Resource not found:', originalRequest.url);
+    }
+
+    // Log server errors
+    if (status >= 500) {
+      console.error('Server error:', {
+        status,
+        url: originalRequest.url,
+        message: errorMessage
       });
     }
+
+    // Log in development only
+    if (import.meta.env.DEV) {
+      console.error(`❌ [API Error] ${status}:`, {
+        url: originalRequest.url,
+        message: errorMessage,
+        data
+      });
+    }
+
+    return Promise.reject(formattedError);
   }
 );
+
+// Helper method to update baseURL dynamically (useful for switching environments)
+export const updateApiBaseURL = (newBaseURL) => {
+  api.defaults.baseURL = newBaseURL;
+  console.log('API baseURL updated to:', newBaseURL);
+};
+
+// Helper to check API connection
+export const checkApiHealth = async () => {
+  try {
+    const response = await api.get('/health');
+    return { isConnected: true, data: response.data };
+  } catch (error) {
+    return { 
+      isConnected: false, 
+      error: error.isNetworkError ? 'Network Error' : error.message 
+    };
+  }
+};
 
 export const authAPI = {
   login: (email: string, password: string, slug: string) =>
@@ -93,8 +168,19 @@ export const authAPI = {
 
   verifyEmail: (token: string) =>
     api.post('/auth/verify-email', { token }),
+  createUser: (data: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+    phone?: string;
+    title?: string;
+    department?: string;
+    staff_id?: string;
+    student_parent_code?: string;
+    send_welcome_email?: boolean;
+  }) => api.post('/auth/users', data),
 };
-
 // ==================== SCHOOL API ====================
 export const schoolAPI = {
   getSchoolInfo: (slug: string) => api.get(`/schools/${slug}`),
@@ -2248,7 +2334,23 @@ export interface ResultsFilterOptions {
   streams?: Array<{ stream_id: string; stream_name: string }>;
   gradingSystems?: Array<{ id: string; name: string }>;
 }
+export interface BulkPDFGenerationParams {
+  classId: string;
+  termId: string;
+  gradingSystemId: string;
+  streamId?: string;
+}
 
+export interface BulkPDFProgress {
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  total: number;
+  processed: number;
+  successful: number;
+  failed: number;
+  downloadUrl?: string;
+  error?: string;
+}
 // ====== RESULTS API ======
 export const resultsAPI = {
   /**
@@ -2505,15 +2607,6 @@ export const resultsAPI = {
     return response;
   },
 
-  /**
-   * ============================================
-   * 📋 UTILITY FUNCTIONS
-   * ============================================
-   */
-
-  /**
-   * Download blob as file with given filename
-   */
   downloadBlob: (blob: Blob, filename: string) => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2544,6 +2637,59 @@ export const resultsAPI = {
     }
     
     return `Results_Export_${date}.${type === 'pdf' ? 'pdf' : 'xlsx'}`;
+  },
+   generateBulkPDFs: async (params: BulkPDFGenerationParams) => {
+    const response = await api.post('/results/bulk-pdfs', params, {
+      responseType: 'blob',
+      headers: {
+        'Accept': 'application/zip',
+      },
+    });
+    return response;
+  },
+
+  /**
+   * Alternative: Generate PDFs and get download link (async processing)
+   * POST /results/bulk-pdfs/async
+   */
+  generateBulkPDFsAsync: async (params: BulkPDFGenerationParams) => {
+    const response = await api.post<{ 
+      success: boolean; 
+      data: { jobId: string; totalStudents: number } 
+    }>('/results/bulk-pdfs/async', params);
+    return response.data;
+  },
+
+  /**
+   * Check status of async bulk PDF generation
+   * GET /results/bulk-pdfs/status/:jobId
+   */
+  getBulkPDFStatus: async (jobId: string) => {
+    const response = await api.get<{ success: boolean; data: BulkPDFProgress }>(
+      `/results/bulk-pdfs/status/${jobId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Download generated bulk PDFs (if using async processing)
+   * GET /results/bulk-pdfs/download/:jobId
+   */
+  downloadBulkPDFs: async (jobId: string) => {
+    const response = await api.get(`/results/bulk-pdfs/download/${jobId}`, {
+      responseType: 'blob',
+    });
+    return response;
+  },
+
+  /**
+   * Generate filename for bulk download
+   */
+  generateBulkFilename: (params: BulkPDFGenerationParams) => {
+    const classInfo = params.classId.slice(0, 8);
+    const streamInfo = params.streamId ? `_${params.streamId.slice(0, 8)}` : '';
+    const date = new Date().toISOString().split('T')[0];
+    return `student_results_${classInfo}${streamInfo}_${date}.zip`;
   }
 };
 export interface TeacherStream {
@@ -2842,7 +2988,16 @@ export const teacherAPI = {
   
   duplicateLessonPlan: (planId: string, data?: any) => 
     api.post(`/lesson-plans/${planId}/duplicate`, data),
-  
+  getStudentsForSubject: async (params: {
+  classId: string;
+  subjectId: string;
+  termId: string;
+  assessmentId: string;
+  streamId?: string;
+}) => {
+  const response = await api.get('/teacher/students-for-subject', { params });
+  return response;
+},
   exportLessonPlans: (params: any) => 
     api.get('/lesson-plans/export', { 
       params,
@@ -3550,6 +3705,776 @@ export interface StudentResponse {
     name: string;
     code: string;
   }>;
+}
+// ==================== CBC ASSESSMENT API ====================
+export interface CBCStrand {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  subject_id: string;
+  curriculum_id: string;
+  created_at: string;
+  updated_at: string;
+  subject?: {
+    id: string;
+    name: string;
+    subject_code: string;
+  };
+  curriculum?: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  sub_strands?: CBCSubStrand[];
+  _count?: {
+    sub_strands: number;
+  };
+}
+
+export interface CBCSubStrand {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  order: number;
+  strand_id: string;
+  created_at: string;
+  updated_at: string;
+  strand?: {
+    id: string;
+    name: string;
+    code: string;
+    subject?: {
+      id: string;
+      name: string;
+      subject_code: string;
+    };
+    curriculum?: {
+      id: string;
+      name: string;
+      code: string;
+    };
+  };
+}
+
+export interface RubricLevel {
+  id: string;
+  level_number: number;
+  level_name: string;
+  level_code?: string;
+  cbc_descriptor?: string;
+  description?: string;
+  min_score?: number;
+  max_score?: number;
+  points?: number;
+  color_code?: string;
+  background_color?: string;
+  icon?: string;
+  is_pass_level: boolean;
+  is_target_level: boolean;
+  display_order: number;
+  rubric_scale_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RubricScale {
+  id: string;
+  scale_name: string;
+  scale_code?: string;
+  description?: string;
+  scale_type: string;
+  target_audience: string;
+  min_levels: number;
+  max_levels: number;
+  use_for_assessment: boolean;
+  use_for_reports: boolean;
+  use_for_feedback: boolean;
+  default_color_scheme?: string;
+  is_active: boolean;
+  is_system_default: boolean;
+  school_id?: string;
+  created_by?: string;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+  levels?: RubricLevel[];
+  _count?: {
+    cbc_assessments: number;
+  };
+}
+
+export interface CBCAssessment {
+  id: string;
+  title: string;
+  description?: string;
+  assessment_type: 'strand_end' | 'formative' | 'diagnostic' | 'sub_strand_end';
+  school_id: string;
+  teacher_id: string;
+  subject_id: string;
+  class_id: string;
+  stream_id?: string;
+  strand_id: string;
+  sub_strand_id?: string;
+  term_id: string;
+  academic_year_id: string;
+  rubric_scale_id?: string;
+  assessment_window_start?: string;
+  assessment_window_end?: string;
+  is_locked: boolean;
+  locked_at?: string;
+  locked_by?: string;
+  total_students?: number;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+  strand?: CBCStrand;
+  sub_strand?: CBCSubStrand;
+  subject?: {
+    id: string;
+    name: string;
+    subject_code: string;
+  };
+  class?: {
+    id: string;
+    class_name: string;
+    class_level: number;
+  };
+  stream?: {
+    id: string;
+    name: string;
+  };
+  rubric_scale?: RubricScale;
+  eligible_students_count?: number;
+}
+
+export interface CBCLearnerAssessment {
+  id: string;
+  cbc_assessment_id: string;
+  student_id: string;
+  student_subject_id?: string;
+  rubric_level_id?: string;
+  teacher_comment?: string;
+  has_evidence: boolean;
+  evidence_url?: string;
+  evidence_description?: string;
+  assessed_in_group?: boolean;
+  group_name?: string;
+  is_locked: boolean;
+  assessed_at?: string;
+  created_at: string;
+  updated_at: string;
+  student?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    admission_number: string;
+  };
+  rubric_level?: RubricLevel;
+}
+
+export interface CBCMarkingSheet {
+  assessment: {
+    id: string;
+    title: string;
+    description?: string;
+    type: string;
+    strand: CBCStrand;
+    subStrand?: CBCSubStrand;
+    subject: any;
+    class: any;
+    stream?: any;
+    isLocked: boolean;
+  };
+  rubricScale: RubricScale;
+  markingSheet: Array<{
+    id: string;
+    student: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      admission_number: string;
+    };
+    currentLevel: RubricLevel | null;
+    teacherComment?: string;
+    hasEvidence: boolean;
+    evidenceUrl?: string;
+    isLocked: boolean;
+    assessedAt?: string;
+  }>;
+  totalStudents: number;
+  assessedCount: number;
+}
+
+export interface CBCAssessmentReport {
+  assessment: {
+    id: string;
+    title: string;
+    type: string;
+    isLocked: boolean;
+    createdAt: string;
+    lockedAt?: string;
+  };
+  context: {
+    strand: CBCStrand;
+    subStrand?: CBCSubStrand;
+    subject: any;
+    class: any;
+    stream?: any;
+    teacher?: {
+      first_name: string;
+      last_name: string;
+    };
+  };
+  rubricScale: RubricScale;
+  statistics: {
+    totalStudents: number;
+    levelDistribution: Record<string, number>;
+    averageLevel: string;
+    averageLevelDescriptor: string;
+  };
+  results: Array<{
+    student: any;
+    level: RubricLevel;
+    teacherComment?: string;
+    hasEvidence: boolean;
+  }>;
+}
+
+export interface CBCStrandReport {
+  id: string;
+  student_id: string;
+  subject_id: string;
+  strand_id: string;
+  term_id: string;
+  academic_year_id: string;
+  school_id: string;
+  class_id?: string;
+  current_level_id: string;
+  previous_level_id?: string;
+  assessment_count: number;
+  first_assessment_date: string;
+  last_assessment_date: string;
+  trend?: 'improving' | 'stable' | 'declining' | 'new';
+  latest_teacher_comment?: string;
+  evidence_count: number;
+  is_included_in_report: boolean;
+  display_order?: number;
+  created_at: string;
+  updated_at: string;
+  strand?: CBCStrand;
+  subject?: any;
+  term?: any;
+  current_level?: RubricLevel;
+  previous_level?: RubricLevel;
+}
+
+export interface ClassStrandSummary {
+  students: number;
+  strandSummary: Array<{
+    subject: any;
+    strand: CBCStrand;
+    totalStudents: number;
+    sumLevels: number;
+    averageLevel: number;
+    levelDistribution: Record<string, number>;
+    students: Array<{
+      studentId: string;
+      level: RubricLevel;
+    }>;
+  }>;
+}
+
+export interface StrandParams {
+  subjectId?: string;
+  curriculumId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  includeSubStrands?: boolean;
+}
+
+export interface CreateStrandData {
+  strandName: string;
+  subjectIdForStrand: string;
+  strandDescription?: string;
+  strandCode?: string;
+}
+
+export interface CreateSubStrandData {
+  subStrandName: string;
+  strandIdForSubStrand: string;
+  subStrandOrder?: number;
+  subStrandDescription?: string;
+  subStrandCode?: string;
+}
+
+export interface UpdateStrandData {
+  strandName?: string;
+  strandCode?: string;
+  strandDescription?: string;
+  name?: string;
+  code?: string;
+  description?: string;
+}
+
+export interface CreateRubricScaleData {
+  scaleName: string;
+  scaleCode?: string;
+  description?: string;
+  scaleType?: string;
+  targetAudience?: string;
+  minLevels?: number;
+  maxLevels?: number;
+  useForAssessment?: boolean;
+  useForReports?: boolean;
+  useForFeedback?: boolean;
+  defaultColorScheme?: string;
+  levels?: Array<{
+    levelNumber: number;
+    levelName: string;
+    levelCode?: string;
+    cbcDescriptor?: string;
+    description?: string;
+    minScore?: number;
+    maxScore?: number;
+    points?: number;
+    colorCode?: string;
+    backgroundColor?: string;
+    icon?: string;
+    isPassLevel?: boolean;
+    isTargetLevel?: boolean;
+    displayOrder?: number;
+  }>;
+}
+
+export interface CreateRubricLevelData {
+  levelNumber: number;
+  levelName: string;
+  levelCode?: string;
+  cbcDescriptor?: string;
+  description?: string;
+  minScore?: number;
+  maxScore?: number;
+  points?: number;
+  colorCode?: string;
+  backgroundColor?: string;
+  icon?: string;
+  isPassLevel?: boolean;
+  isTargetLevel?: boolean;
+  displayOrder?: number;
+}
+
+export interface CreateCbcAssessmentData {
+  title: string;
+  description?: string;
+  assessmentType: 'strand_end' | 'formative' | 'diagnostic' | 'sub_strand_end';
+  subjectId: string;
+  classId: string;
+  streamId?: string;
+  strandId: string;
+  subStrandId?: string;
+  termId: string;
+  academicYearId: string;
+  assessmentWindowStart?: string;
+  assessmentWindowEnd?: string;
+  rubricScaleId?: string;
+}
+
+export interface SubmitLearnerAssessmentData {
+  rubricLevelId?: string;
+  teacherComment?: string;
+  hasEvidence?: boolean;
+  evidenceUrl?: string;
+  evidenceDescription?: string;
+}
+
+export interface BatchSubmitAssessmentData {
+  assessmentId: string;
+  assessments: Array<{
+    learnerAssessmentId: string;
+    rubricLevelId?: string;
+    teacherComment?: string;
+    hasEvidence?: boolean;
+    evidenceUrl?: string;
+    evidenceDescription?: string;
+    studentId?: string;
+  }>;
+}
+
+export interface SubmitSchemeForApprovalData {
+  schemeId: string;
+}
+
+export interface ReviewSchemeOfWorkData {
+  schemeId: string;
+  status: 'approved' | 'revision_requested';
+  notes?: string;
+  deadline?: string;
+}
+
+export interface CreateRecordOfWorkData {
+  schemeTopicId: string;
+  lessonDate: string;
+  challenges?: string;
+  remarks?: string;
+  topicsCovered?: string[];
+}
+
+export interface CoverageReportParams {
+  classId: string;
+  termId: string;
+}
+
+export interface StrandMasteryParams {
+  subjectId: string;
+  classId: string;
+  termId: string;
+}
+
+export interface StudentProgressParams {
+  subjectId?: string;
+  termId?: string;
+}
+
+export interface ClassStrandSummaryParams {
+  classId: string;
+  termId?: string;
+  subjectId?: string;
+}
+
+// ============================================
+// CBC API SERVICE
+// ============================================
+
+export const cbcAPIS = {
+  // ================================================
+  // STRAND ROUTES
+  // ================================================
+  
+  /**
+   * Create a new strand (Admin only)
+   * POST /cbc/strands
+   */
+  createStrand: (data: CreateStrandData) => 
+    api.post('/cbc/strands', data),
+
+  /**
+   * Get all strands with filters
+   * GET /cbc/strands
+   */
+  getAllStrands: (params?: StrandParams) => 
+    api.get('/cbc/strands', { params }),
+  getAllCbcAssessments: (params?: any) => 
+  api.get('/cbc/assessments', { params }),
+
+  /**
+   * Get strands with statistics
+   * GET /cbc/strands/stats
+   */
+  getStrandsWithStats: (params?: { subjectId?: string; curriculumId?: string }) => 
+    api.get('/cbc/strands/stats', { params }),
+
+  /**
+   * Get strands by subject
+   * GET /cbc/strands/by-subject
+   */
+  getStrandsBySubject: (params: { subjectId: string; curriculumId?: string }) => 
+    api.get('/cbc/strands/by-subject', { params }),
+
+  /**
+   * Get single strand by ID
+   * GET /cbc/strands/:strandId
+   */
+  getStrandById: (strandId: string) => 
+    api.get(`/cbc/strands/${strandId}`),
+
+  /**
+   * Update strand (Admin only)
+   * PUT /cbc/strands/:strandId
+   */
+  updateStrand: (strandId: string, data: UpdateStrandData) => 
+    api.put(`/cbc/strands/${strandId}`, data),
+
+  // ================================================
+  // SUB-STRAND ROUTES
+  // ================================================
+  
+  /**
+   * Create a new sub-strand (Admin only)
+   * POST /cbc/sub-strands
+   */
+  createSubStrand: (data: CreateSubStrandData) => 
+    api.post('/cbc/sub-strands', data),
+
+  // ================================================
+  // SCHEME OF WORK TOPICS ROUTES
+  // ================================================
+  
+  /**
+   * Get scheme topics by subject
+   * GET /cbc/scheme-topics/subject/:subjectId
+   */
+  getSchemeTopicsBySubject: (subjectId: string) => 
+    api.get(`/cbc/scheme-topics/subject/${subjectId}`),
+
+  /**
+   * Get all scheme topics with filters
+   * GET /cbc/scheme-topics
+   */
+  getAllSchemeTopics: (params?: any) => 
+    api.get('/cbc/scheme-topics', { params }),
+
+  // ================================================
+  // SCHEME OF WORK APPROVAL ROUTES
+  // ================================================
+  
+  /**
+   * Submit scheme for approval (Teacher)
+   * POST /cbc/scheme/submit-approval
+   */
+  submitSchemeForApproval: (data: SubmitSchemeForApprovalData) => 
+    api.post('/cbc/scheme/submit-approval', data),
+
+  /**
+   * Review scheme of work (Admin/HOD)
+   * POST /cbc/scheme/review
+   */
+  reviewSchemeOfWork: (data: ReviewSchemeOfWorkData) => 
+    api.post('/cbc/scheme/review', data),
+
+  // ================================================
+  // RECORD OF WORK ROUTES
+  // ================================================
+  
+  /**
+   * Create record of work (Teacher)
+   * POST /cbc/record-work
+   */
+  createRecordOfWork: (data: CreateRecordOfWorkData) => 
+    api.post('/cbc/record-work', data),
+
+  // ================================================
+  // CURRICULUM COVERAGE ROUTES
+  // ================================================
+  
+  /**
+   * Get curriculum coverage report
+   * GET /cbc/coverage-report
+   */
+  getCurriculumCoverageReport: (params: CoverageReportParams) => 
+    api.get('/cbc/coverage-report', { params }),
+
+  // ================================================
+  // ASSESSMENT ROUTES (Legacy)
+  // ================================================
+  
+  /**
+   * Get assessments by subject
+   * GET /cbc/assessments/subject/:subjectId
+   */
+  getAssessmentsBySubject: (subjectId: string, params?: any) => 
+    api.get(`/cbc/assessments/subject/${subjectId}`, { params }),
+
+  // ================================================
+  // CBC STUDENT MARKING ROUTES (Legacy)
+  // ================================================
+  
+  /**
+   * Get students for CBC marking (Teacher)
+   * GET /cbc/students/cbc-marking
+   */
+  getStudentsForCbcMarking: (params: { assessmentId: string; streamId: string }) => 
+    api.get('/cbc/students/cbc-marking', { params }),
+
+  // ================================================
+  // RUBRIC SCALE ROUTES
+  // ================================================
+  
+  /**
+   * Create rubric scale (Admin only)
+   * POST /cbc/rubric-scales
+   */
+  createRubricScale: (data: CreateRubricScaleData) => 
+    api.post('/cbc/rubric-scales', data),
+
+  /**
+   * Get all rubric scales with filters
+   * GET /cbc/rubric-scales
+   */
+  getRubricScales: (params?: {
+    scaleType?: string;
+    isActive?: boolean;
+    includeSystemDefault?: boolean;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/cbc/rubric-scales', { params }),
+
+  /**
+   * Get single rubric scale by ID
+   * GET /cbc/rubric-scales/:scaleId
+   */
+  getRubricScaleById: (scaleId: string) => 
+    api.get(`/cbc/rubric-scales/${scaleId}`),
+
+  /**
+   * Update rubric scale (Admin only)
+   * PUT /cbc/rubric-scales/:scaleId
+   */
+  updateRubricScale: (scaleId: string, data: Partial<CreateRubricScaleData>) => 
+    api.put(`/cbc/rubric-scales/${scaleId}`, data),
+
+  /**
+   * Delete rubric scale (Admin only)
+   * DELETE /cbc/rubric-scales/:scaleId
+   */
+  deleteRubricScale: (scaleId: string) => 
+    api.delete(`/cbc/rubric-scales/${scaleId}`),
+
+  // ================================================
+  // RUBRIC LEVEL ROUTES
+  // ================================================
+  
+  /**
+   * Add level to rubric scale (Admin only)
+   * POST /cbc/rubric-scales/:scaleId/levels
+   */
+  addRubricLevel: (scaleId: string, data: CreateRubricLevelData) => 
+    api.post(`/cbc/rubric-scales/${scaleId}/levels`, data),
+
+  /**
+   * Update rubric level (Admin only)
+   * PUT /cbc/rubric-levels/:levelId
+   */
+  updateRubricLevel: (levelId: string, data: Partial<CreateRubricLevelData>) => 
+    api.put(`/cbc/rubric-levels/${levelId}`, data),
+
+  /**
+   * Delete rubric level (Admin only)
+   * DELETE /cbc/rubric-levels/:levelId
+   */
+  deleteRubricLevel: (levelId: string) => 
+    api.delete(`/cbc/rubric-levels/${levelId}`),
+
+  // ================================================
+  // CBC ASSESSMENT ROUTES
+  // ================================================
+  
+  /**
+   * Create CBC assessment (Teacher/Admin)
+   * POST /cbc/cbc-assessments
+   */
+  createCbcAssessment: (data: CreateCbcAssessmentData) => 
+    api.post('/cbc/cbc-assessments', data),
+
+  /**
+   * Get marking sheet for CBC assessment
+   * GET /cbc/cbc-assessments/:assessmentId/marking-sheet
+   */
+  getCbcMarkingSheet: (assessmentId: string) => 
+    api.get(`/cbc/cbc-assessments/${assessmentId}/marking-sheet`),
+
+  /**
+   * Submit single CBC learner assessment
+   * PUT /cbc/cbc-learner-assessments/:learnerAssessmentId
+   */
+  submitCbcLearnerAssessment: (learnerAssessmentId: string, data: SubmitLearnerAssessmentData) => 
+    api.put(`/cbc/cbc-learner-assessments/${learnerAssessmentId}`, data),
+
+  /**
+   * Submit batch CBC learner assessments
+   * POST /cbc/cbc-assessments/:assessmentId/batch-submit
+   */
+  submitCbcLearnerAssessmentsBatch: (assessmentId: string, data: { assessments: any[] }) => 
+    api.post(`/cbc/cbc-assessments/${assessmentId}/batch-submit`, data),
+
+  /**
+   * Lock CBC assessment (Teacher/Admin)
+   * PUT /cbc/cbc-assessments/:assessmentId/lock
+   */
+  lockCbcAssessment: (assessmentId: string) => 
+    api.put(`/cbc/cbc-assessments/${assessmentId}/lock`),
+
+  /**
+   * Get CBC assessment report
+   * GET /cbc/cbc-assessments/:assessmentId/report
+   */
+  getCbcAssessmentReport: (assessmentId: string) => 
+    api.get(`/cbc/cbc-assessments/${assessmentId}/report`),
+
+  // ================================================
+  // STUDENT PROGRESS ROUTES
+  // ================================================
+  
+  /**
+   * Get student strand progress
+   * GET /cbc/students/:studentId/strand-progress
+   */
+  getStudentStrandProgress: (studentId: string, params?: StudentProgressParams) => 
+    api.get(`/cbc/students/${studentId}/strand-progress`, { params }),
+
+  /**
+   * Get class strand summary
+   * GET /cbc/class-strand-summary
+   */
+  getClassStrandSummary: (params: ClassStrandSummaryParams) => 
+    api.get('/cbc/class-strand-summary', { params }),
+
+  // ================================================
+  // DATA FETCHING ROUTES (for dropdowns)
+  // ================================================
+  
+  /**
+   * Get classes for teacher
+   * GET /cbc/classes
+   */
+  getClasses: () => 
+    api.get('/cbc/classes'),
+
+  /**
+   * Get streams for a class
+   * GET /cbc/streams
+   */
+  getStreams: (classId: string) => 
+    api.get('/cbc/streams', { params: { classId } }),
+
+  /**
+   * Get subjects for teacher
+   * GET /cbc/subjects
+   */
+  getSubjects: (classId?: string, streamId?: string) => 
+    api.get('/cbc/subjects', { params: { classId, streamId } }),
+
+  /**
+   * Get terms for school
+   * GET /cbc/terms
+   */
+  getTerms: () => 
+    api.get('/cbc/terms'),
+
+  /**
+   * Get current academic year
+   * GET /cbc/academic-year/current
+   */
+  getCurrentAcademicYear: () => 
+    api.get('/cbc/academic-year/current'),
+};
+
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    hasMore: boolean;
+  };
 }
 export const studentAPI = {
   // ============ BASIC CRUD OPERATIONS ============

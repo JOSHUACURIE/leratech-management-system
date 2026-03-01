@@ -569,6 +569,42 @@ const ResultsPerformance: React.FC = () => {
       setStatsLoading(false);
     }
   };
+const handleBulkPDFGeneration = async () => {
+  const f = filtersRef.current;
+  if (!f.classId || !f.termId || !f.gradingSystemId) {
+    toast.error('Please select class, term, and grading system first');
+    return;
+  }
+
+  setExportLoading(true);
+  try {
+    const params = {
+      classId: f.classId,
+      termId: f.termId,
+      gradingSystemId: f.gradingSystemId,
+      ...(f.streamId && { streamId: f.streamId })
+    };
+
+    const response = await resultsAPI.generateBulkPDFs(params);
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', resultsAPI.generateBulkFilename(params));
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    toast.success(`Generated PDFs for ${f.streamId ? 'stream' : 'class'} successfully`);
+  } catch (error: any) {
+    console.error('Bulk PDF generation failed:', error);
+    toast.error(error.response?.data?.error || 'Failed to generate PDFs');
+  } finally {
+    setExportLoading(false);
+  }
+};
 
   // ============================================
   // DATA FETCHING — supporting fetchers
@@ -1117,7 +1153,24 @@ const ResultsPerformance: React.FC = () => {
               {exportLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
             </button>
           </div>
-
+{/* Bulk PDF Generation */}
+<div className="space-y-2 mt-4 pt-4 border-t border-slate-200">
+  <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Bulk Export</h4>
+  <button 
+    onClick={handleBulkPDFGeneration} 
+    disabled={exportLoading}
+    className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50"
+  >
+    <div className="flex items-center gap-3">
+      <DownloadCloud size={20} />
+      <div className="text-left">
+        <p className="font-bold">Generate All PDFs</p>
+        <p className="text-xs text-white/80">ZIP file with {filteredResults.length} student reports</p>
+      </div>
+    </div>
+    {exportLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+  </button>
+</div>
           {/* PDF Exports */}
           <div className="space-y-2">
             <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">PDF Reports</h4>
