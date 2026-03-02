@@ -16,15 +16,23 @@ import {
 // ─────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────
-
 interface Student {
   id: string;
-  first_name: string;
-  last_name: string;
-  admission_number: string;
-  class?: { id: string; class_name: string; class_level: number };
-  stream?: { id: string; name: string };
-  student_status: string;
+  admissionNumber: string;      // camelCase, not admission_number
+  firstName: string;            // camelCase, not first_name
+  lastName: string;             // camelCase, not last_name
+  fullName: string;
+  gender: string;
+  classId: string;
+  streamId: string;
+  studentType: string;
+  enrollmentDate: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  className: string;            // Direct field, not nested in class object
+  classLevel: number;            // Direct field
+  streamName: string;            // Direct field, not nested in stream object
 }
 
 interface ClassOption {
@@ -449,16 +457,23 @@ const CBCReportsDashboard: React.FC = () => {
   // ─────────────────────────────────────────────────
   // DERIVED DATA
   // ─────────────────────────────────────────────────
-
-  const filteredStudents = useMemo(() => {
-    if (!searchQuery) return students;
-    const q = searchQuery.toLowerCase();
-    return students.filter(
-      (s) =>
-        `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
-        s.admission_number.toLowerCase().includes(q)
-    );
-  }, [students, searchQuery]);
+const filteredStudents = useMemo(() => {
+  if (!searchQuery || !students.length) return students;
+  
+  const query = searchQuery.toLowerCase().trim();
+  
+  return students.filter((s) => {
+    const fullName = s.fullName?.toLowerCase() || '';
+    const firstName = s.firstName?.toLowerCase() || '';
+    const lastName = s.lastName?.toLowerCase() || '';
+    const admission = s.admissionNumber?.toLowerCase() || '';
+    
+    return fullName.includes(query) || 
+           firstName.includes(query) || 
+           lastName.includes(query) || 
+           admission.includes(query);
+  });
+}, [students, searchQuery]);
 
   // ─────────────────────────────────────────────────
   // UI HELPERS
@@ -671,128 +686,142 @@ const CBCReportsDashboard: React.FC = () => {
             </button>
           ))}
         </div>
+{/* ══════════════════════════════════════════
+    STUDENTS TAB - UPDATED WITH CORRECT FIELD NAMES
+══════════════════════════════════════════ */}
+{activeTab === 'students' && (
+  <div className="space-y-4">
+    <div className="flex flex-col sm:flex-row justify-between gap-4">
+      <div className="relative flex-1 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+        <input
+          type="text"
+          placeholder="Search by name or admission number..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      <div className="flex bg-white rounded-xl border border-slate-200 p-1 self-start">
+        <button onClick={() => setSelectedView('grid')} className={`p-2 rounded-lg ${selectedView === 'grid' ? 'bg-slate-100 text-slate-900' : 'text-slate-600'}`}>
+          <Grid size={16} />
+        </button>
+        <button onClick={() => setSelectedView('table')} className={`p-2 rounded-lg ${selectedView === 'table' ? 'bg-slate-100 text-slate-900' : 'text-slate-600'}`}>
+          <Table size={16} />
+        </button>
+      </div>
+    </div>
 
-        {/* ══════════════════════════════════════════
-            STUDENTS TAB
-        ══════════════════════════════════════════ */}
-        {activeTab === 'students' && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search by name or admission number..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+    {filteredStudents.length === 0 ? (
+      <Card className="bg-white rounded-2xl p-8 text-center">
+        <div className="max-w-md mx-auto">
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="text-slate-400" size={24} />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">No Students Found</h3>
+          <p className="text-sm text-slate-500">
+            {selectedClass ? 'No students match your search criteria' : 'Please select a class and term to view students'}
+          </p>
+        </div>
+      </Card>
+    ) : selectedView === 'grid' ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredStudents.map((student) => (
+          <Card
+            key={student.id}
+            className={`bg-white rounded-2xl border-2 transition-all cursor-pointer hover:shadow-lg ${
+              selectedStudent?.id === student.id ? 'border-indigo-500 shadow-lg' : 'border-slate-200 hover:border-indigo-300'
+            }`}
+            onClick={() => setSelectedStudent(student)}
+          >
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
+                    <User size={24} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-800">
+                      {student.firstName || ''} {student.lastName || ''}
+                    </h3>
+                    <p className="text-xs text-slate-500">{student.admissionNumber || 'N/A'}</p>
+                  </div>
+                </div>
+                {selectedStudent?.id === student.id && <CheckCircle size={18} className="text-indigo-600" />}
               </div>
-              <div className="flex bg-white rounded-xl border border-slate-200 p-1 self-start">
-                <button onClick={() => setSelectedView('grid')}  className={`p-2 rounded-lg ${selectedView === 'grid'  ? 'bg-slate-100' : 'text-slate-600'}`}><Grid  size={16} /></button>
-                <button onClick={() => setSelectedView('table')} className={`p-2 rounded-lg ${selectedView === 'table' ? 'bg-slate-100' : 'text-slate-600'}`}><Table size={16} /></button>
+              
+              <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
+                <GraduationCap size={14} />
+                <span>
+                  {student.className || 'No Class'} {student.streamName || ''}
+                </span>
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); generateStudentReport(student, 'pdf'); }}
+                  disabled={generating || !selectedTerm || !selectedAcademicYear}
+                  className="flex-1 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 flex items-center justify-center gap-1 disabled:opacity-40"
+                >
+                  <Download size={14} />PDF
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); generateStudentReport(student, 'json'); }}
+                  disabled={!selectedTerm || !selectedAcademicYear}
+                  className="flex-1 px-3 py-2 bg-slate-50 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center justify-center gap-1 disabled:opacity-40"
+                >
+                  <Eye size={14} />Preview
+                </button>
               </div>
             </div>
-
-            {filteredStudents.length === 0 ? (
-              <Card className="bg-white rounded-2xl p-8 text-center">
-                <div className="max-w-md mx-auto">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Users className="text-slate-400" size={24} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">No Students Found</h3>
-                  <p className="text-sm text-slate-500">
-                    {selectedClass ? 'No students match your search criteria' : 'Please select a class and term to view students'}
-                  </p>
-                </div>
-              </Card>
-            ) : selectedView === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredStudents.map((student) => (
-                  <Card
-                    key={student.id}
-                    className={`bg-white rounded-2xl border-2 transition-all cursor-pointer hover:shadow-lg ${
-                      selectedStudent?.id === student.id ? 'border-indigo-500 shadow-lg' : 'border-slate-200 hover:border-indigo-300'
-                    }`}
-                    onClick={() => setSelectedStudent(student)}
-                  >
-                    <div className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
-                            <User size={24} className="text-indigo-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-800">{student.first_name} {student.last_name}</h3>
-                            <p className="text-xs text-slate-500">{student.admission_number}</p>
-                          </div>
-                        </div>
-                        {selectedStudent?.id === student.id && <CheckCircle size={18} className="text-indigo-600" />}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
-                        <GraduationCap size={14} />
-                        <span>{student.class?.class_name} {student.stream?.name}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); generateStudentReport(student, 'pdf'); }}
-                          disabled={generating || !selectedTerm || !selectedAcademicYear}
-                          className="flex-1 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 flex items-center justify-center gap-1 disabled:opacity-40"
-                        >
-                          <Download size={14} />PDF
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); generateStudentReport(student, 'json'); }}
-                          disabled={!selectedTerm || !selectedAcademicYear}
-                          className="flex-1 px-3 py-2 bg-slate-50 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-100 flex items-center justify-center gap-1 disabled:opacity-40"
-                        >
-                          <Eye size={14} />Preview
-                        </button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card className="bg-white rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        {['Admission', 'Name', 'Class', 'Stream', 'Actions'].map((h) => (
-                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredStudents.map((student) => (
-                        <tr
-                          key={student.id}
-                          className={`hover:bg-slate-50 cursor-pointer ${selectedStudent?.id === student.id ? 'bg-indigo-50' : ''}`}
-                          onClick={() => setSelectedStudent(student)}
-                        >
-                          <td className="px-4 py-3 text-sm font-medium text-slate-700">{student.admission_number}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{student.first_name} {student.last_name}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{student.class?.class_name}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{student.stream?.name || '-'}</td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); generateStudentReport(student, 'pdf'); }}
-                              disabled={!selectedTerm || !selectedAcademicYear}
-                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-40"
-                            >
-                              <Download size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            )}
-          </div>
-        )}
+          </Card>
+        ))}
+      </div>
+    ) : (
+      <Card className="bg-white rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Admission</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Class</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Stream</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredStudents.map((student) => (
+                <tr
+                  key={student.id}
+                  className={`hover:bg-slate-50 cursor-pointer ${selectedStudent?.id === student.id ? 'bg-indigo-50' : ''}`}
+                  onClick={() => setSelectedStudent(student)}
+                >
+                  <td className="px-4 py-3 text-sm font-medium text-slate-700">{student.admissionNumber || 'N/A'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {student.firstName || ''} {student.lastName || ''}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{student.className || 'N/A'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{student.streamName || '-'}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); generateStudentReport(student, 'pdf'); }}
+                      disabled={!selectedTerm || !selectedAcademicYear}
+                      className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-40"
+                      title="Download PDF Report"
+                    >
+                      <Download size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    )}
+  </div>
+)}
 
         {/* ══════════════════════════════════════════
             ASSESSMENTS TAB

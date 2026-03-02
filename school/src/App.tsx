@@ -29,6 +29,7 @@ import LessonPlan from "./pages/teacher/LessonPlan";
 import RecordOfWorkCovered from "./pages/teacher/RecordOfWorkCovered";
 import MySchemes from "./pages/teacher/MySchemes";
 import StudentSubjectAssignment from "./pages/teacher/StudentSubjectAssignment";
+import CBCReportsDashboard from "./pages/admin/CBCReportsDashboard";
 // Parent Pages
 import ParentDashboard from "./pages/parent/Dashboard";
 import Results from "./pages/parent/Results";
@@ -120,6 +121,13 @@ function App() {
             <ProtectedRoute allowedRoles={["admin"]}>
               <DashboardLayout role="admin">
                 <FeeManagement />
+              </DashboardLayout>
+            </ProtectedRoute>
+          } />
+            <Route path="cbe-reports" element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <DashboardLayout role="admin">
+                <CBCReportsDashboard />
               </DashboardLayout>
             </ProtectedRoute>
           } />

@@ -4368,6 +4368,43 @@ export const cbcAPIS = {
    */
   createCbcAssessment: (data: CreateCbcAssessmentData) => 
     api.post('/cbc/cbc-assessments', data),
+ 
+
+  /**
+   * Get single CBC assessment by ID
+   * GET /api/v1/cbc/assessments/:assessmentId
+   */
+  getCbcAssessmentById: (assessmentId: string) => 
+    api.get(`/cbc/assessments/${assessmentId}`),
+
+  /**
+   * Get CBC assessment statistics
+   * GET /api/v1/cbc/assessments/stats/summary
+   */
+  getCbcAssessmentStats: (params?: {
+    classId?: string;
+    termId?: string;
+    subjectId?: string;
+    academicYearId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => api.get('/cbc/assessments/stats/summary', { params }),
+    generateStudentCBCReport: (studentId: string, params: {
+    termId: string;
+    academicYearId: string;
+    format?: 'pdf' | 'json';
+  }) => api.get(`/cbc/reports/student/${studentId}`, { 
+    params,
+    responseType: params.format === 'pdf' ? 'blob' : 'json'
+  }),
+
+  /**
+   * Get student strand progress
+   * GET /api/v1/cbc/students/:studentId/strand-progress
+   */
+  getStudentStrandProgress: (studentId: string, params?: {
+    termId?: string;
+  }) => api.get(`/cbc/students/${studentId}/strand-progress`, { params }),
 
   /**
    * Get marking sheet for CBC assessment
